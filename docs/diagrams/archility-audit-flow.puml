@@ -1,0 +1,19 @@
+@startuml
+title archility audit flow
+
+start
+:parse CLI arguments;
+:resolve repository paths;
+:inspect baseline artifacts;
+:detect code-like markers and source roots;
+:count workflows and diagrams;
+:build recommendations;
+
+if (JSON output?) then (yes)
+  :emit JSON payload;
+else (no)
+  :emit text report;
+endif
+
+stop
+@enduml
