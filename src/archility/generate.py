@@ -215,6 +215,7 @@ def build_plantuml_text(repo_root: Path) -> str:
     focus_roots = detect_focus_roots(repo_root)
     course_groups = detect_course_taxonomy(repo_root)
     workflow_label = ".github/workflows/" if (repo_root / ".github" / "workflows").exists() else "workflow coverage not added yet"
+    nested_patterns_text = _deliverable_families_text("\n")
     lines = [
         "@startuml",
         f"title {repo_name} Repository Architecture Starter",
@@ -237,7 +238,7 @@ def build_plantuml_text(repo_root: Path) -> str:
         lines.extend(
             [
                 f'rectangle "{_course_taxonomy_summary(course_groups)}" as taxonomy_summary #E0F2FE',
-                f'rectangle "{_deliverable_families_text("\\n")}" as nested_patterns #DCFCE7',
+                f'rectangle "{nested_patterns_text}" as nested_patterns #DCFCE7',
                 'package "Subject Areas" #F8FAFC {',
             ]
         )
