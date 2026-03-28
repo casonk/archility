@@ -101,16 +101,18 @@ def build_python_diagram_plan(repo_path: str | Path) -> PythonDiagramPlan | None
 
 
 def find_plantuml_sources(repo_path: str | Path) -> list[Path]:
+    repo_root = Path(repo_path).resolve()
     root = diagram_root(repo_path)
     if not root.exists():
         return []
+    ignored_filenames = _managed_pyreverse_filenames(repo_root)
     return sorted(
         (
             path
             for path in root.rglob("*")
             if path.is_file()
             and path.suffix.lower() in PLANTUML_SUFFIXES
-            and path.name not in MANAGED_PYREVERSE_FILENAMES
+            and path.name not in ignored_filenames
         ),
         key=str,
     )
@@ -362,3 +364,12 @@ def _python_target_label(repo_root: Path, target: Path) -> str:
 def _safe_project_name(name: str) -> str:
     safe = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_")
     return safe or "repository"
+
+
+def _managed_pyreverse_filenames(repo_root: Path) -> set[str]:
+    project_name = _safe_project_name(repo_root.name)
+    return {
+        *MANAGED_PYREVERSE_FILENAMES,
+        f"classes_{project_name}.puml",
+        f"packages_{project_name}.puml",
+    }

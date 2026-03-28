@@ -47,6 +47,8 @@ class RenderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = Path(tmp) / "demo-repo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
+            (repo_root / "docs" / "diagrams" / "classes_demo-repo.puml").write_text("@startuml\n@enduml\n")
+            (repo_root / "docs" / "diagrams" / "packages_demo-repo.puml").write_text("@startuml\n@enduml\n")
             (repo_root / "pyproject.toml").write_text('[project]\nname = "demo-repo"\n')
             (repo_root / "src" / "demo").mkdir(parents=True)
             (repo_root / "src" / "demo" / "__init__.py").write_text("")
@@ -56,6 +58,15 @@ class RenderTests(unittest.TestCase):
 
             self.assertEqual(len(steps), 6)
             self.assertEqual(steps[0].tool, "pyreverse")
+            self.assertEqual(
+                [Path(step.source).name for step in steps if step.tool == "plantuml"],
+                [
+                    "python-classes.puml",
+                    "python-classes.puml",
+                    "python-packages.puml",
+                    "python-packages.puml",
+                ],
+            )
             self.assertEqual(
                 steps[0].command,
                 [
