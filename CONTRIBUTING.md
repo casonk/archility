@@ -1,11 +1,11 @@
 # Contributing
 
-`archility` is the shared utility repo for architecture inventory and documentation-audit workflows across the portfolio.
+`archility` is the shared utility repo for architecture toolchain bootstrap, render orchestration, inventory, and documentation-audit workflows across the portfolio.
 
 ## Workflow
 
 1. Keep changes scoped to one architecture-maintenance theme when possible.
-2. Update `README.md`, `AGENTS.md`, and `docs/contributor-architecture-blueprint.md` when CLI behavior or repo expectations change.
+2. Update `README.md`, `AGENTS.md`, and `docs/contributor-architecture-blueprint.md` when CLI behavior, setup flow, or repo expectations change.
 3. Add or update tests in the same change when audit logic changes.
 4. Use Conventional Commits such as `feat: add repo audit command` or `docs: refine architecture guidance`.
 
@@ -15,8 +15,10 @@ Run these repo-root commands before publishing changes:
 
 ```bash
 python3 -m pip install -e .
+bash -n setup.sh
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m unittest discover -s tests -v
 PYTHONPATH=src python3 -m archility audit .
+PYTHONPATH=src python3 -m archility render . --dry-run
 ```
 
 ## Content Standards

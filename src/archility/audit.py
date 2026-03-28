@@ -14,15 +14,36 @@ CODE_MARKER_FILES = (
     "go.mod",
 )
 CODE_MARKER_DIRS = ("src", "tests", "test", "scripts", "services", "app")
-DIAGRAM_SUFFIXES = {
+SOURCE_DIAGRAM_SUFFIXES = {
     ".drawio",
     ".puml",
     ".plantuml",
     ".mmd",
     ".mermaid",
-    ".svg",
-    ".png",
 }
+RENDER_ARTIFACT_SUFFIXES = {
+    ".png",
+    ".svg",
+}
+DIAGRAM_SUFFIXES = SOURCE_DIAGRAM_SUFFIXES | RENDER_ARTIFACT_SUFFIXES
+TOOLCHAIN_SOURCE_SUFFIXES = {
+    "plantuml": {".puml", ".plantuml"},
+    "drawio": {".drawio"},
+    "mermaid": {".mmd", ".mermaid"},
+}
+TOOLCHAIN_HINT_PATTERNS = {
+    "plantuml": ("plantuml",),
+    "drawio": ("draw.io", "drawio", "diagrams.net"),
+    "inkscape": ("inkscape",),
+    "mermaid": ("mermaid",),
+}
+TOOLCHAIN_ORDER = ("plantuml", "drawio", "inkscape", "mermaid")
+TOOLCHAIN_HINT_FILES = (
+    Path("README.md"),
+    Path("AGENTS.md"),
+    Path("setup.sh"),
+    Path("docs/contributor-architecture-blueprint.md"),
+)
 
 
 @dataclass(slots=True)
@@ -34,6 +55,10 @@ class RepoAudit:
     has_blueprint: bool
     workflow_count: int
     diagram_count: int
+    diagram_source_count: int
+    render_artifact_count: int
+    diagram_formats: list[str]
+    toolchains: list[str]
     source_roots: list[str]
     recommendations: list[str]
 
@@ -57,15 +82,61 @@ def count_workflows(root: Path) -> int:
     return sum(1 for path in workflow_dir.iterdir() if path.is_file())
 
 
-def count_diagrams(root: Path) -> int:
+def collect_diagram_files(root: Path) -> list[Path]:
     docs_dir = root / 'docs'
     if not docs_dir.exists():
-        return 0
-    return sum(
-        1
-        for path in docs_dir.rglob('*')
-        if path.is_file() and path.suffix.lower() in DIAGRAM_SUFFIXES
+        return []
+    return sorted(
+        (
+            path
+            for path in docs_dir.rglob('*')
+            if path.is_file() and path.suffix.lower() in DIAGRAM_SUFFIXES
+        ),
+        key=lambda path: str(path.relative_to(root)),
     )
+
+
+def detect_diagram_formats(diagram_files: list[Path]) -> list[str]:
+    return sorted({path.suffix.lower() for path in diagram_files})
+
+
+def count_source_diagrams(diagram_files: list[Path]) -> int:
+    return sum(1 for path in diagram_files if path.suffix.lower() in SOURCE_DIAGRAM_SUFFIXES)
+
+
+def count_render_artifacts(diagram_files: list[Path]) -> int:
+    return sum(1 for path in diagram_files if path.suffix.lower() in RENDER_ARTIFACT_SUFFIXES)
+
+
+def iter_toolchain_hint_files(root: Path) -> list[Path]:
+    hint_files = [root / relative_path for relative_path in TOOLCHAIN_HINT_FILES]
+    workflow_dir = root / '.github' / 'workflows'
+    if workflow_dir.exists():
+        hint_files.extend(path for path in workflow_dir.iterdir() if path.is_file())
+    return [path for path in hint_files if path.is_file()]
+
+
+def read_search_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding='utf-8').lower()
+    except UnicodeDecodeError:
+        return path.read_text(encoding='utf-8', errors='ignore').lower()
+
+
+def detect_toolchains(root: Path, diagram_files: list[Path]) -> list[str]:
+    detected: set[str] = set()
+    diagram_formats = set(detect_diagram_formats(diagram_files))
+    for toolchain, suffixes in TOOLCHAIN_SOURCE_SUFFIXES.items():
+        if diagram_formats & suffixes:
+            detected.add(toolchain)
+
+    for path in iter_toolchain_hint_files(root):
+        text = read_search_text(path)
+        for toolchain, patterns in TOOLCHAIN_HINT_PATTERNS.items():
+            if any(pattern in text for pattern in patterns):
+                detected.add(toolchain)
+
+    return [toolchain for toolchain in TOOLCHAIN_ORDER if toolchain in detected]
 
 
 def build_recommendations(
@@ -76,6 +147,7 @@ def build_recommendations(
     has_blueprint: bool,
     workflow_count: int,
     diagram_count: int,
+    toolchains: list[str],
 ) -> list[str]:
     recommendations: list[str] = []
     if not has_agents:
@@ -89,7 +161,13 @@ def build_recommendations(
     if code_like and workflow_count == 0:
         recommendations.append('Add at least one .github/workflows/ check for code-focused validation.')
     if code_like and diagram_count == 0:
-        recommendations.append('Consider adding docs/diagrams/ artifacts for non-trivial flows.')
+        recommendations.append(
+            'Consider adding docs/diagrams/ artifacts for non-trivial flows. The current portfolio pattern uses PlantUML (.puml) and/or Draw.io (.drawio) sources plus rendered PNG/SVG artifacts.'
+        )
+    if diagram_count > 0 and not toolchains:
+        recommendations.append(
+            'Document the local architecture-diagram toolchain in README.md or docs/contributor-architecture-blueprint.md so contributors can regenerate the artifacts.'
+        )
     return recommendations
 
 
@@ -105,7 +183,12 @@ def audit_repo(path: str | Path) -> RepoAudit:
     has_lessons = (root / 'LESSONSLEARNED.md').is_file()
     has_blueprint = (root / 'docs' / 'contributor-architecture-blueprint.md').is_file()
     workflow_count = count_workflows(root)
-    diagram_count = count_diagrams(root)
+    diagram_files = collect_diagram_files(root)
+    diagram_count = len(diagram_files)
+    diagram_source_count = count_source_diagrams(diagram_files)
+    render_artifact_count = count_render_artifacts(diagram_files)
+    diagram_formats = detect_diagram_formats(diagram_files)
+    toolchains = detect_toolchains(root, diagram_files)
     source_roots = detect_source_roots(root)
     recommendations = build_recommendations(
         code_like=code_like,
@@ -114,6 +197,7 @@ def audit_repo(path: str | Path) -> RepoAudit:
         has_blueprint=has_blueprint,
         workflow_count=workflow_count,
         diagram_count=diagram_count,
+        toolchains=toolchains,
     )
     return RepoAudit(
         path=str(root),
@@ -123,6 +207,10 @@ def audit_repo(path: str | Path) -> RepoAudit:
         has_blueprint=has_blueprint,
         workflow_count=workflow_count,
         diagram_count=diagram_count,
+        diagram_source_count=diagram_source_count,
+        render_artifact_count=render_artifact_count,
+        diagram_formats=diagram_formats,
+        toolchains=toolchains,
         source_roots=source_roots,
         recommendations=recommendations,
     )
@@ -142,6 +230,13 @@ def format_text_report(results: list[RepoAudit]) -> str:
         lines.append(f'  blueprint: {"yes" if result.has_blueprint else "no"}')
         lines.append(f'  workflows: {result.workflow_count}')
         lines.append(f'  diagrams: {result.diagram_count}')
+        lines.append(f'  diagram_sources: {result.diagram_source_count}')
+        lines.append(f'  diagram_renders: {result.render_artifact_count}')
+        lines.append(
+            '  diagram_formats: '
+            + (', '.join(result.diagram_formats) if result.diagram_formats else 'none')
+        )
+        lines.append('  toolchains: ' + (', '.join(result.toolchains) if result.toolchains else 'none'))
         lines.append(
             '  source_roots: ' + (', '.join(result.source_roots) if result.source_roots else 'none')
         )
