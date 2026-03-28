@@ -1,5 +1,29 @@
 @startuml classes_archility
 set namespaceSeparator none
+class "DrawioBounds" as archility.generate.DrawioBounds {
+  bottom : int
+  height : int
+  left : int
+  mid_x : int
+  mid_y : int
+  right : int
+  top : int
+  width : int
+  x : int
+  y : int
+}
+class "DrawioCellBounds" as archility.render.DrawioCellBounds {
+  bottom : float
+  height : float
+  left : float
+  mid_x : float
+  mid_y : float
+  right : float
+  top : float
+  width : float
+  x : float
+  y : float
+}
 class "GenerateResult" as archility.generate.GenerateResult {
   created : list[str]
   path : str

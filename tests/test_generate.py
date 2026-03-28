@@ -4,12 +4,29 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from xml.etree import ElementTree
 
 from archility.cli import main
 from archility.generate import generate_repo
 
 
 class GenerateTests(unittest.TestCase):
+    def _edge_points(self, drawio: str, edge_id: int) -> list[tuple[int, int]]:
+        document = ElementTree.fromstring(drawio)
+        for cell in document.iter("mxCell"):
+            if cell.attrib.get("id") != str(edge_id):
+                continue
+            geometry = cell.find("mxGeometry")
+            self.assertIsNotNone(geometry, f"edge {edge_id} is missing geometry")
+            points = geometry.find("Array")
+            if points is None:
+                return []
+            return [
+                (int(point.attrib["x"]), int(point.attrib["y"]))
+                for point in points.findall("mxPoint")
+            ]
+        self.fail(f"edge {edge_id} not found")
+
     def test_generate_repo_creates_standard_architecture_layout(self):
         with tempfile.TemporaryDirectory() as tmp:
             portfolio_root = Path(tmp) / "portfolio"
@@ -19,6 +36,8 @@ class GenerateTests(unittest.TestCase):
             repo_root.mkdir()
             (repo_root / "README.md").write_text("# Demo\n")
             (repo_root / "src").mkdir()
+            (repo_root / "scripts").mkdir()
+            (repo_root / "services").mkdir()
             (repo_root / ".github" / "workflows").mkdir(parents=True)
             (repo_root / ".github" / "workflows" / "ci.yml").write_text("name: CI\n")
 
@@ -47,6 +66,20 @@ class GenerateTests(unittest.TestCase):
             self.assertIn('rectangle "src/" as root_1', plantuml)
             self.assertIn("demo-repo Architecture Starter", drawio)
             self.assertIn("Focus Root&#10;src/", drawio)
+            self.assertIn("Focus Root&#10;scripts/", drawio)
+            self.assertIn("Focus Root&#10;services/", drawio)
+
+            diagram_source_routes = [self._edge_points(drawio, edge_id) for edge_id in (511, 512, 513)]
+            automation_routes = [self._edge_points(drawio, edge_id) for edge_id in (521, 522, 523)]
+
+            self.assertTrue(all(len(route) == 3 for route in diagram_source_routes))
+            self.assertTrue(all(len(route) == 4 for route in automation_routes))
+            self.assertEqual(len({route[1][1] for route in diagram_source_routes}), 3)
+            self.assertEqual(len({route[1][1] for route in automation_routes}), 3)
+            self.assertTrue(all(route[0][0] == route[1][0] for route in diagram_source_routes))
+            self.assertTrue(all(route[1][1] == route[2][1] for route in diagram_source_routes))
+            self.assertTrue(all(route[2][0] == route[3][0] for route in automation_routes))
+            self.assertLess(automation_routes[0][2][0], 220)
 
     def test_generate_repo_documents_python_supplemental_diagrams(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -138,6 +171,17 @@ class GenerateTests(unittest.TestCase):
             self.assertIn("Subject Area&#10;CSC (2 courses)", drawio)
             self.assertIn("Subject Area&#10;INB (1 course)", drawio)
             self.assertIn("MTH357-Advanced_Calculus", drawio)
+
+            summary_routes = [self._edge_points(drawio, edge_id) for edge_id in (503, 504)]
+            subject_routes = [self._edge_points(drawio, edge_id) for edge_id in (520, 521, 522, 523, 524)]
+
+            self.assertEqual(len(summary_routes[0]), 3)
+            self.assertEqual(len(summary_routes[1]), 4)
+            self.assertTrue(all(len(route) == 3 for route in subject_routes))
+            self.assertEqual(len({route[1][1] for route in subject_routes[:3]}), 3)
+            self.assertEqual(len({route[1][1] for route in subject_routes[3:]}), 2)
+            self.assertTrue(all(route[0][0] == route[1][0] for route in subject_routes))
+            self.assertTrue(all(route[1][1] == route[2][1] for route in subject_routes))
 
     def test_cli_generate_json_output(self):
         with tempfile.TemporaryDirectory() as tmp:
