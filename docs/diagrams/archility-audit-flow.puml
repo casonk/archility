@@ -3,10 +3,12 @@ title archility audit flow
 
 start
 :parse CLI arguments;
+:resolve shared toolchain ownership;
 :resolve repository paths;
 :inspect baseline artifacts;
 :detect code-like markers and source roots;
-:count workflows and diagrams;
+:inventory diagram formats and toolchain hints;
+:count workflows, diagram sources, and render artifacts;
 :build recommendations;
 
 if (JSON output?) then (yes)

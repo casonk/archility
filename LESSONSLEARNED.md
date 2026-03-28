@@ -13,3 +13,13 @@ Unlike `CHATHISTORY.md`, this file should keep only reusable lessons that should
 ## Lessons
 
 - If the repo documents `python -m archility` as a supported invocation path, keep `src/archility/__main__.py` in place so the module and console-script entry points stay aligned.
+- The current portfolio architecture-diagram convention is PlantUML and/or Draw.io source files plus checked-in PNG/SVG renders, with Inkscape showing up in bootstrap scripts when SVG-to-PNG export needs to be scripted.
+- Shared architecture toolchain downloads and wrappers should live in `archility`, not in feature repos that only consume the rendered diagram outputs.
+- Cross-repo architecture automation is easier to keep deterministic when every repo uses the same starter filenames: `docs/contributor-architecture-blueprint.md` plus `docs/diagrams/repo-architecture.{puml,drawio}`.
+- The generated `repo-architecture.puml` starter diagrams should use PlantUML's Smetana layout so the portfolio baseline does not depend on a machine-local Graphviz install just to render the starter view.
+- Keep the two authoring paths explicit: `archility generate` is the deterministic programmatic starter path, while agent-authored repo architecture should come from full repository inspection and remain intentionally non-deterministic.
+- Even with Smetana as the starter default, `archility` should continue to support Graphviz-backed PlantUML diagrams because richer repo-specific diagrams may still depend on `dot`.
+- Draw.io PNG exports can render backticked identifiers oddly even when the corresponding SVG looks acceptable, so prefer plain identifier text in diagram labels when checked-in PNG artifacts matter.
+- The shared draw.io wrapper should pass `--no-sandbox` so headless exports remain usable in sandboxed or CI-like environments.
+- Docs-first archive repos with many coded top-level directories, such as course archives, should be grouped by stable prefixes like `CSC/` or `MTH/` instead of truncating the architecture starter to the first few directories.
+- Architecture-tooling repos like `archility` should be diagrammed around the lifecycle they orchestrate: inspect, scaffold, agent-author, render, and validate, plus the shared toolchain boundary and target-repo outputs.

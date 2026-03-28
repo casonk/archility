@@ -1,0 +1,54 @@
+@startuml
+!pragma layout smetana
+title archility Repository Architecture
+skinparam shadowing false
+skinparam defaultFontName Monospace
+skinparam packageStyle rectangle
+skinparam linetype ortho
+
+actor "Portfolio Maintainer\nor AI Agent" as maintainer
+
+package "Public Entry Surface" #F8FAFC {
+  rectangle "CLI Surface\nsrc/archility/cli.py\nsrc/archility/__main__.py\ncommands: audit | generate | render" as cli #DBEAFE
+}
+
+package "Lifecycle Layers" #F8FAFC {
+  rectangle "Inspection Layer\nsrc/archility/audit.py\nRepoAudit model\ntext / JSON reports" as audit #E0F2FE
+  rectangle "Programmatic Scaffolding\nsrc/archility/generate.py\nDeterministic starter blueprint\nand diagram-source generation" as generate #DCFCE7
+  rectangle "Render Orchestration\nsrc/archility/render.py\nshared render plans\nand execution" as render #FCE7F3
+}
+
+package "Agentic Authoring Boundary" #F8FAFC {
+  rectangle "Agentic Path\nfull repository inspection\nnon-deterministic architecture rewrite" as agentic #FEF3C7
+}
+
+package "Shared Bootstrap And References" #F8FAFC {
+  rectangle "Shared Toolchain Bootstrap\nsetup.sh\ntools/bin/plantuml\ntools/bin/drawio\ntools/bin/dot (optional)" as bootstrap #FDE68A
+  rectangle "Reference Docs\nREADME.md\ndocs/contributor-architecture-blueprint.md\ndocs/portfolio-architecture-toolchain.md\ndocs/diagrams/archility-audit-flow.puml" as refs #E2E8F0
+  rectangle "Validation Surface\ntests/test_audit.py\ntests/test_generate.py\ntests/test_render.py\n.github/workflows/ci.yml" as validation #DDD6FE
+}
+
+package "Target Repository Outputs" #F8FAFC {
+  rectangle "Source Artifacts in Target Repo\ndocs/contributor-architecture-blueprint.md\ndocs/diagrams/repo-architecture.puml\ndocs/diagrams/repo-architecture.drawio" as sources #ECFCCB
+  rectangle "Rendered Artifacts in Target Repo\nrepo-architecture.puml.svg / .png\nrepo-architecture.drawio.svg / .png" as renders #FBCFE8
+  rectangle "Audit Reports\nbaseline coverage\ntoolchain hints\nnext-step recommendations" as reports #E0E7FF
+}
+
+maintainer --> cli
+maintainer --> agentic
+refs --> cli
+cli --> audit
+cli --> generate
+cli --> render
+audit --> reports
+audit --> sources : inspect existing assets
+generate --> sources
+agentic --> sources
+sources --> render : shared source layout
+bootstrap --> render
+render --> renders
+validation --> audit
+validation --> generate
+validation --> render
+
+@enduml
