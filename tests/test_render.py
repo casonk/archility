@@ -86,6 +86,14 @@ class RenderTests(unittest.TestCase):
                     str(repo_root / "docs" / "diagrams" / "packages_demo-repo.puml"),
                 ),
             )
+            self.assertEqual(
+                steps[1].produced_output,
+                str(repo_root / "docs" / "diagrams" / "classes_demo-repo.svg"),
+            )
+            self.assertEqual(
+                steps[3].produced_output,
+                str(repo_root / "docs" / "diagrams" / "packages_demo-repo.svg"),
+            )
             self.assertEqual(steps[-1].tool, "pydeps")
             self.assertEqual(
                 steps[-1].command,
@@ -177,9 +185,21 @@ class RenderTests(unittest.TestCase):
                 elif command[0].endswith("pydeps"):
                     (repo_root / "docs" / "diagrams" / "python-import-deps-src-demo.svg").write_text("<svg />\n")
                 elif "-tsvg" in command:
-                    Path(command[-1].replace(".puml", ".svg")).write_text("<svg />\n")
+                    source_name = Path(command[-1]).name
+                    if source_name == "python-classes.puml":
+                        (repo_root / "docs" / "diagrams" / "classes_demo.svg").write_text("<svg />\n")
+                    elif source_name == "python-packages.puml":
+                        (repo_root / "docs" / "diagrams" / "packages_demo.svg").write_text("<svg />\n")
+                    else:
+                        Path(command[-1].replace(".puml", ".svg")).write_text("<svg />\n")
                 elif "-tpng" in command:
-                    Path(command[-1].replace(".puml", ".png")).write_text("png\n")
+                    source_name = Path(command[-1]).name
+                    if source_name == "python-classes.puml":
+                        (repo_root / "docs" / "diagrams" / "classes_demo.png").write_text("png\n")
+                    elif source_name == "python-packages.puml":
+                        (repo_root / "docs" / "diagrams" / "packages_demo.png").write_text("png\n")
+                    else:
+                        Path(command[-1].replace(".puml", ".png")).write_text("png\n")
 
             run_render_steps(steps, runner=runner)
 
