@@ -48,6 +48,30 @@ class GenerateTests(unittest.TestCase):
             self.assertIn("demo-repo Architecture Starter", drawio)
             self.assertIn("Focus Root&#10;src/", drawio)
 
+    def test_generate_repo_documents_python_supplemental_diagrams(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            portfolio_root = Path(tmp) / "portfolio"
+            archility_root = portfolio_root / "util-repos" / "archility"
+            repo_root = portfolio_root / "python-demo"
+            archility_root.mkdir(parents=True)
+            repo_root.mkdir()
+            (repo_root / "pyproject.toml").write_text('[project]\nname = "python-demo"\n')
+            (repo_root / "src" / "python_demo").mkdir(parents=True)
+            (repo_root / "src" / "python_demo" / "__init__.py").write_text("")
+            (repo_root / "src" / "python_demo" / "core.py").write_text("class Demo:\n    pass\n")
+
+            result = generate_repo(repo_root, archility_root=archility_root)
+
+            blueprint = (repo_root / "docs" / "contributor-architecture-blueprint.md").read_text()
+
+            self.assertEqual(len(result.created), 3)
+            self.assertIn("Supplemental Python diagrams after `archility render`", blueprint)
+            self.assertIn("docs/diagrams/python-import-deps-src-python_demo.svg", blueprint)
+            self.assertIn("docs/diagrams/python-classes.puml", blueprint)
+            self.assertIn("docs/diagrams/python-packages.puml", blueprint)
+            self.assertIn("supplemental code-introspection diagrams", blueprint)
+            self.assertIn("Supplemental Python path", blueprint)
+
     def test_generate_repo_preserves_existing_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             portfolio_root = Path(tmp) / "portfolio"

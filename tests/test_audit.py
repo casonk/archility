@@ -78,6 +78,16 @@ class AuditTests(unittest.TestCase):
                 result.recommendations,
             )
 
+    def test_audit_repo_detects_pydeps_and_pyreverse_toolchain_hints(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'README.md').write_text('Use pydeps for import graphs and pyreverse for UML diagrams.\n')
+            (root / 'setup.sh').write_text('python3 -m pip install pydeps pylint\n')
+
+            result = audit_repo(root)
+
+            self.assertEqual(result.toolchains, ['pydeps', 'pyreverse'])
+
     def test_cli_json_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
