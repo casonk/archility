@@ -23,3 +23,4 @@ Unlike `CHATHISTORY.md`, this file should keep only reusable lessons that should
 - The shared draw.io wrapper should pass `--no-sandbox` so headless exports remain usable in sandboxed or CI-like environments.
 - Docs-first archive repos with many coded top-level directories, such as course archives, should be grouped by stable prefixes like `CSC/` or `MTH/` instead of truncating the architecture starter to the first few directories.
 - Architecture-tooling repos like `archility` should be diagrammed around the lifecycle they orchestrate: inspect, scaffold, agent-author, render, and validate, plus the shared toolchain boundary and target-repo outputs.
+- Python sidecar diagrams should stay explicitly supplemental to the repo-authored architecture, be generated through `archility render`, normalize `pyreverse` outputs to stable filenames, and pass `--no-config` to `pydeps` so user or repo config does not silently change the deterministic output contract.

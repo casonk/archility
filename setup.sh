@@ -6,9 +6,12 @@ TOOLS_DIR="${REPO_ROOT}/tools"
 BIN_DIR="${TOOLS_DIR}/bin"
 PLANTUML_DIR="${TOOLS_DIR}/plantuml"
 DRAWIO_DIR="${TOOLS_DIR}/drawio"
+PYTHON_DIAGRAM_TOOLS_DIR="${TOOLS_DIR}/python-diagram-tools"
 
 PLANTUML_VERSION="${PLANTUML_VERSION:-1.2026.2}"
 DRAWIO_VERSION="${DRAWIO_VERSION:-24.7.17}"
+PYDEPS_SPEC="${PYDEPS_SPEC:-pydeps}"
+PYLINT_SPEC="${PYLINT_SPEC:-pylint}"
 
 SKIP_SYSTEM_PACKAGES=0
 SKIP_DRAWIO=0
@@ -25,6 +28,8 @@ Options:
 Environment overrides:
   PLANTUML_VERSION         PlantUML jar version  (default: ${PLANTUML_VERSION})
   DRAWIO_VERSION           draw.io version       (default: ${DRAWIO_VERSION})
+  PYDEPS_SPEC              pydeps pip spec       (default: ${PYDEPS_SPEC})
+  PYLINT_SPEC              pylint pip spec       (default: ${PYLINT_SPEC})
 EOF
 }
 
@@ -164,6 +169,50 @@ WRAPPER
   echo "[setup] Starter PlantUML diagrams still render via Smetana, but richer PlantUML diagrams may need Graphviz."
 }
 
+install_python_diagram_tools() {
+  command -v python3 >/dev/null 2>&1 || {
+    echo "[setup] python3 is required for pydeps and pyreverse." >&2
+    exit 1
+  }
+
+  mkdir -p "${BIN_DIR}"
+  if [[ ! -x "${PYTHON_DIAGRAM_TOOLS_DIR}/bin/python" ]]; then
+    echo "[setup] Creating Python diagram-tool virtual environment..."
+    python3 -m venv "${PYTHON_DIAGRAM_TOOLS_DIR}"
+  fi
+
+  echo "[setup] Installing Python diagram tools (${PYDEPS_SPEC}, ${PYLINT_SPEC})..."
+  "${PYTHON_DIAGRAM_TOOLS_DIR}/bin/python" -m pip install --upgrade pip
+  "${PYTHON_DIAGRAM_TOOLS_DIR}/bin/python" -m pip install "${PYDEPS_SPEC}" "${PYLINT_SPEC}"
+
+  cat > "${BIN_DIR}/pydeps" <<'WRAPPER'
+#!/usr/bin/env bash
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PATH="$DIR:$PATH"
+if [[ -x "$DIR/../python-diagram-tools/bin/pydeps" ]]; then
+  exec "$DIR/../python-diagram-tools/bin/pydeps" "$@"
+fi
+exec pydeps "$@"
+WRAPPER
+  chmod +x "${BIN_DIR}/pydeps"
+
+  cat > "${BIN_DIR}/pyreverse" <<'WRAPPER'
+#!/usr/bin/env bash
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PATH="$DIR:$PATH"
+if [[ -x "$DIR/../python-diagram-tools/bin/pyreverse" ]]; then
+  exec "$DIR/../python-diagram-tools/bin/pyreverse" "$@"
+fi
+exec pyreverse "$@"
+WRAPPER
+  chmod +x "${BIN_DIR}/pyreverse"
+
+  echo "[setup] pydeps wrapper: ${BIN_DIR}/pydeps"
+  echo "[setup] pyreverse wrapper: ${BIN_DIR}/pyreverse"
+}
+
 install_drawio() {
   if [[ "${SKIP_DRAWIO}" -eq 1 ]]; then
     echo "[setup] Skipping draw.io download (--skip-drawio)."
@@ -221,9 +270,11 @@ print_summary() {
 
 [setup] Architecture authoring paths:
   - deterministic starter generation: archility generate /path/to/repository
+  - deterministic Python sidecar diagrams for package/module repos: archility render /path/to/repository
   - agent-authored repo architecture: write repo-specific diagrams/docs, then render them here
 [setup] Graphviz-backed PlantUML diagrams are supported when dot is available.
 [setup] Starter repo-architecture diagrams still render without Graphviz via Smetana.
+[setup] pydeps and pyreverse are installed into a local tool venv and exposed through tools/bin/.
 
 [setup] Render diagrams through archility:
   archility render /path/to/repository
@@ -234,5 +285,6 @@ EOF
 install_system_packages
 install_plantuml
 install_graphviz_wrapper
+install_python_diagram_tools
 install_drawio
 print_summary

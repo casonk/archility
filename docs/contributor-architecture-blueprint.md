@@ -2,7 +2,7 @@
 
 ## Intent
 
-`archility` is the portfolio utility repo for architecture-aware repository maintenance. It owns both the shared diagram-tool bootstrap flow and the cross-repo render/audit entry points, and it defines the split between deterministic starter generation and non-deterministic agent-authored architecture.
+`archility` is the portfolio utility repo for architecture-aware repository maintenance. It owns both the shared diagram-tool bootstrap flow and the cross-repo render/audit entry points, and it defines the split between deterministic starter generation and non-deterministic agent-authored architecture. For Python repos it also owns the deterministic `pydeps` and `pyreverse` sidecar diagram flow.
 
 The portfolio diagram toolchain conventions that inform this repo live in `docs/portfolio-architecture-toolchain.md`.
 
@@ -19,7 +19,8 @@ The portfolio diagram toolchain conventions that inform this repo live in `docs/
    - `docs/diagrams/repo-architecture.drawio`
 4. The agentic path can then replace or extend those sources after a full repository inspection, while keeping the standard file locations stable.
 5. The render layer consumes those sources, along with the wrappers prepared by `setup.sh`, and produces the checked-in SVG and PNG artifacts that downstream repos carry.
-6. Tests and CI validate the audit, generate, and render behavior so `archility` remains the shared orchestration home for architecture work across the portfolio.
+6. For Python repos with package or module roots, that same render path can derive `pydeps` import graphs and `pyreverse` UML sources/renders as supplemental deterministic artifacts.
+7. Tests and CI validate the audit, generate, and render behavior so `archility` remains the shared orchestration home for architecture work across the portfolio.
 
 ## Current Components
 
@@ -53,6 +54,7 @@ The portfolio diagram toolchain conventions that inform this repo live in `docs/
 - `src/archility/generate.py` owns the portfolio-standard starter layout generation path.
 - The generator creates missing files without overwriting richer repo-specific architecture docs that already exist.
 - This is the programmatic path: it derives the starter strictly from repository structure and code markers, so it should remain deterministic.
+- For Python package or module repos, the generated blueprint also documents the derived `pydeps` / `pyreverse` sidecar artifacts that `archility render` can materialize.
 - This layer should be treated as scaffolding, not as the final architecture truth for repositories with non-trivial workflows.
 - The current starter layout is:
   - `docs/contributor-architecture-blueprint.md`
@@ -72,13 +74,17 @@ The portfolio diagram toolchain conventions that inform this repo live in `docs/
 ### Render Layer
 
 - `src/archility/render.py` builds deterministic render steps for PlantUML and Draw.io source files under a target repo’s `docs/diagrams/`.
+- For Python repos it also derives deterministic `pydeps` SVG import graphs and `pyreverse` PlantUML source/renders from detected top-level package or module targets.
 - `setup.sh` owns the shared local binary/bootstrap flow for:
   - PlantUML jar + wrapper under `tools/bin/plantuml`
   - Draw.io desktop AppImage extraction + wrapper under `tools/bin/drawio`
+  - `pydeps` wrapper under `tools/bin/pydeps`
+  - `pyreverse` wrapper under `tools/bin/pyreverse`
   - Graphviz support for PlantUML diagrams that rely on `dot`
   - system-package guidance for Java and Inkscape
 - `archility render <repo>` is the shared orchestration entry point that other repos should lean on instead of carrying their own diagram-tool bootstrap scripts.
 - Render behavior should remain neutral to authoring mode: it should work the same way for deterministic starter diagrams and agent-authored diagrams.
+- The Python sidecar diagrams are supplemental introspection assets. They should not be treated as a replacement for the repo-authored architecture blueprint or the paired `repo-architecture` files.
 - The render layer is the boundary where repo-authored sources become portfolio-standard `.svg` and `.png` artifacts.
 
 ### Validation And Reference Layer

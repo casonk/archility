@@ -14,6 +14,20 @@ CODE_MARKER_FILES = (
     "go.mod",
 )
 CODE_MARKER_DIRS = ("src", "tests", "test", "scripts", "services", "app")
+PYTHON_MARKER_FILES = ("pyproject.toml", "setup.py", "setup.cfg")
+PYTHON_SOURCE_ROOT_DIRS = ("src", "app", "services", "scripts")
+PYTHON_EXCLUDED_DIRS = {
+    ".git",
+    ".github",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "docs",
+    "node_modules",
+    "tools",
+    "venv",
+}
 SOURCE_DIAGRAM_SUFFIXES = {
     ".drawio",
     ".puml",
@@ -34,10 +48,12 @@ TOOLCHAIN_SOURCE_SUFFIXES = {
 TOOLCHAIN_HINT_PATTERNS = {
     "plantuml": ("plantuml",),
     "drawio": ("draw.io", "drawio", "diagrams.net"),
+    "pydeps": ("pydeps",),
+    "pyreverse": ("pyreverse",),
     "inkscape": ("inkscape",),
     "mermaid": ("mermaid",),
 }
-TOOLCHAIN_ORDER = ("plantuml", "drawio", "inkscape", "mermaid")
+TOOLCHAIN_ORDER = ("plantuml", "drawio", "pydeps", "pyreverse", "inkscape", "mermaid")
 TOOLCHAIN_HINT_FILES = (
     Path("README.md"),
     Path("AGENTS.md"),
@@ -73,6 +89,68 @@ def detect_code_like(root: Path) -> bool:
 
 def detect_source_roots(root: Path) -> list[str]:
     return [name for name in CODE_MARKER_DIRS if (root / name).exists()]
+
+
+def _should_skip_python_scan(path: Path) -> bool:
+    return path.name.startswith(".") or path.name in PYTHON_EXCLUDED_DIRS
+
+
+def _is_python_package(path: Path) -> bool:
+    return path.is_dir() and (path / "__init__.py").is_file()
+
+
+def _has_python_descendants(path: Path) -> bool:
+    if path.is_file():
+        return path.suffix == ".py"
+    if not path.is_dir():
+        return False
+
+    for child in sorted(path.iterdir(), key=lambda entry: entry.name):
+        if _should_skip_python_scan(child):
+            continue
+        if child.is_file() and child.suffix == ".py":
+            return True
+        if child.is_dir() and (_is_python_package(child) or _has_python_descendants(child)):
+            return True
+    return False
+
+
+def _direct_python_targets(container: Path) -> list[Path]:
+    if container.is_file():
+        return [container] if container.suffix == ".py" else []
+    if not container.is_dir():
+        return []
+
+    targets: list[Path] = []
+    for child in sorted(container.iterdir(), key=lambda entry: entry.name):
+        if _should_skip_python_scan(child):
+            continue
+        if _is_python_package(child) or (child.is_file() and child.suffix == ".py"):
+            targets.append(child)
+    return targets
+
+
+def collect_python_diagram_targets(root: Path) -> list[Path]:
+    containers: list[Path] = []
+    for name in PYTHON_SOURCE_ROOT_DIRS:
+        candidate = root / name
+        if candidate.is_dir() and _has_python_descendants(candidate):
+            containers.append(candidate)
+
+    root_targets = _direct_python_targets(root)
+    if root_targets or any((root / marker).exists() for marker in PYTHON_MARKER_FILES):
+        containers.append(root)
+
+    seen: set[Path] = set()
+    targets: list[Path] = []
+    for container in containers:
+        for target in _direct_python_targets(container):
+            resolved = target.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            targets.append(resolved)
+    return targets
 
 
 def count_workflows(root: Path) -> int:

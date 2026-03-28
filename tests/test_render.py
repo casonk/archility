@@ -43,6 +43,70 @@ class RenderTests(unittest.TestCase):
                 str(repo_root / "docs" / "diagrams" / "repo-architecture.drawio.svg"),
             )
 
+    def test_build_render_steps_for_python_repo_adds_pydeps_and_pyreverse(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp) / "demo-repo"
+            (repo_root / "docs" / "diagrams").mkdir(parents=True)
+            (repo_root / "pyproject.toml").write_text('[project]\nname = "demo-repo"\n')
+            (repo_root / "src" / "demo").mkdir(parents=True)
+            (repo_root / "src" / "demo" / "__init__.py").write_text("")
+            (repo_root / "src" / "demo" / "core.py").write_text("from . import __init__\n")
+
+            steps = build_render_steps(repo_root, archility_root=Path("/tool-home"))
+
+            self.assertEqual(len(steps), 6)
+            self.assertEqual(steps[0].tool, "pyreverse")
+            self.assertEqual(
+                steps[0].command,
+                [
+                    "/tool-home/tools/bin/pyreverse",
+                    "--output",
+                    "puml",
+                    "--output-directory",
+                    "docs/diagrams",
+                    "--project",
+                    "demo-repo",
+                    "--source-roots",
+                    "src",
+                    "src/demo",
+                ],
+            )
+            self.assertEqual(steps[0].cwd, str(repo_root))
+            self.assertEqual(
+                steps[0].outputs,
+                (
+                    str(repo_root / "docs" / "diagrams" / "python-classes.puml"),
+                    str(repo_root / "docs" / "diagrams" / "python-packages.puml"),
+                ),
+            )
+            self.assertEqual(
+                steps[0].produced_outputs,
+                (
+                    str(repo_root / "docs" / "diagrams" / "classes_demo-repo.puml"),
+                    str(repo_root / "docs" / "diagrams" / "packages_demo-repo.puml"),
+                ),
+            )
+            self.assertEqual(steps[-1].tool, "pydeps")
+            self.assertEqual(
+                steps[-1].command,
+                [
+                    "/tool-home/tools/bin/pydeps",
+                    "--no-config",
+                    "--noshow",
+                    "--max-bacon",
+                    "0",
+                    "-T",
+                    "svg",
+                    "-o",
+                    "docs/diagrams/python-import-deps-src-demo.svg",
+                    "src/demo",
+                ],
+            )
+            self.assertEqual(
+                steps[-1].output,
+                str(repo_root / "docs" / "diagrams" / "python-import-deps-src-demo.svg"),
+            )
+
     def test_format_render_plan_for_empty_repo(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = Path(tmp)
@@ -78,7 +142,7 @@ class RenderTests(unittest.TestCase):
 
             steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
 
-            def runner(command: list[str]) -> None:
+            def runner(command: list[str], cwd: str | None) -> None:
                 if "-tsvg" in command:
                     (repo_root / "docs" / "diagrams" / "repo-architecture.svg").write_text("<svg />\n")
                 elif "-tpng" in command:
@@ -90,6 +154,44 @@ class RenderTests(unittest.TestCase):
             self.assertTrue((repo_root / "docs" / "diagrams" / "repo-architecture.puml.png").exists())
             self.assertFalse((repo_root / "docs" / "diagrams" / "repo-architecture.svg").exists())
             self.assertFalse((repo_root / "docs" / "diagrams" / "repo-architecture.png").exists())
+
+    def test_run_render_steps_renames_pyreverse_outputs_and_renders_generated_sources(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp) / "demo"
+            (repo_root / "docs" / "diagrams").mkdir(parents=True)
+            (repo_root / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+            (repo_root / "src" / "demo").mkdir(parents=True)
+            (repo_root / "src" / "demo" / "__init__.py").write_text("")
+            (repo_root / "src" / "demo" / "core.py").write_text("class Demo:\n    pass\n")
+            tool_root = repo_root / "tool-home" / "tools" / "bin"
+            tool_root.mkdir(parents=True)
+            for tool_name in ("plantuml", "pydeps", "pyreverse"):
+                (tool_root / tool_name).write_text("#!/usr/bin/env bash\n")
+
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
+
+            def runner(command: list[str], cwd: str | None) -> None:
+                if command[0].endswith("pyreverse"):
+                    (repo_root / "docs" / "diagrams" / "classes_demo.puml").write_text("@startuml\n@enduml\n")
+                    (repo_root / "docs" / "diagrams" / "packages_demo.puml").write_text("@startuml\n@enduml\n")
+                elif command[0].endswith("pydeps"):
+                    (repo_root / "docs" / "diagrams" / "python-import-deps-src-demo.svg").write_text("<svg />\n")
+                elif "-tsvg" in command:
+                    Path(command[-1].replace(".puml", ".svg")).write_text("<svg />\n")
+                elif "-tpng" in command:
+                    Path(command[-1].replace(".puml", ".png")).write_text("png\n")
+
+            run_render_steps(steps, runner=runner)
+
+            self.assertTrue((repo_root / "docs" / "diagrams" / "python-classes.puml").exists())
+            self.assertTrue((repo_root / "docs" / "diagrams" / "python-packages.puml").exists())
+            self.assertTrue((repo_root / "docs" / "diagrams" / "python-classes.puml.svg").exists())
+            self.assertTrue((repo_root / "docs" / "diagrams" / "python-classes.puml.png").exists())
+            self.assertTrue((repo_root / "docs" / "diagrams" / "python-packages.puml.svg").exists())
+            self.assertTrue((repo_root / "docs" / "diagrams" / "python-packages.puml.png").exists())
+            self.assertTrue((repo_root / "docs" / "diagrams" / "python-import-deps-src-demo.svg").exists())
+            self.assertFalse((repo_root / "docs" / "diagrams" / "classes_demo.puml").exists())
+            self.assertFalse((repo_root / "docs" / "diagrams" / "packages_demo.puml").exists())
 
 
 if __name__ == "__main__":

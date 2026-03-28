@@ -9,7 +9,7 @@ import re
 from xml.sax.saxutils import escape
 
 from .audit import detect_source_roots
-from .render import build_render_steps, package_repo_root, run_render_steps
+from .render import PythonDiagramPlan, build_python_diagram_plan, build_render_steps, package_repo_root, run_render_steps
 
 EXCLUDED_TOP_LEVEL_DIRS = {
     ".git",
@@ -154,11 +154,21 @@ def build_blueprint_text(repo_root: Path, *, archility_root: Path | None = None)
     rel_archility = relative_archility_path(repo_root, archility_root=archility_root)
     rel_repo = relative_repo_from_archility(repo_root, archility_root=archility_root)
     structure_lines = blueprint_structure_lines(repo_root)
+    python_plan = build_python_diagram_plan(repo_root)
     workflow_line = (
         "- `.github/workflows/` is the standard automation directory for repo validation."
         if (repo_root / ".github" / "workflows").exists()
         else "- No `.github/workflows/` directory is present yet."
     )
+    python_asset_lines = _python_blueprint_asset_lines(python_plan)
+    contributor_notes = [
+        "- Treat this file and the paired `docs/diagrams/` sources as the default architecture handoff surface.",
+    ]
+    if python_plan is not None:
+        contributor_notes.append(
+            "- Treat the `pydeps` and `pyreverse` outputs as supplemental code-introspection diagrams. "
+            "They do not replace the repo-authored architecture blueprint or the paired repo-architecture sources."
+        )
     return "\n".join(
         [
             "# Contributor Architecture Blueprint",
@@ -175,11 +185,13 @@ def build_blueprint_text(repo_root: Path, *, archility_root: Path | None = None)
             "  - `docs/diagrams/repo-architecture.puml.png`",
             "  - `docs/diagrams/repo-architecture.drawio.svg`",
             "  - `docs/diagrams/repo-architecture.drawio.png`",
+            *python_asset_lines,
             f"- Shared toolchain owner: `{rel_archility}` from this repo",
             "",
             "## Architecture Authoring Paths",
             "",
             "- Programmatic path: `archility generate` builds this starter strictly from repository code and folder markers. This path is deterministic.",
+            "- Supplemental Python path: for repositories with detectable Python packages or modules, `archility render` also derives `pydeps` and `pyreverse` diagrams as deterministic sidecar assets.",
             "- Agentic path: an AI agent should inspect the full repository, understand the real execution and dependency boundaries, then rewrite or extend this starter into a repo-specific architecture. This path is intentionally non-deterministic.",
             "- Keep the standard filenames and folder layout even when the agentic path replaces the starter content with a more unique architecture.",
             "",
@@ -199,11 +211,27 @@ def build_blueprint_text(repo_root: Path, *, archility_root: Path | None = None)
             "",
             "## Contributor Notes",
             "",
-            "- Treat this file and the paired `docs/diagrams/` sources as the default architecture handoff surface.",
+            *contributor_notes,
             "- Expand this starter blueprint with repo-specific flow, dependency, and deployment details when the repository grows beyond the generated baseline.",
             "- Update the blueprint and diagram sources together when folder structure, execution flow, or integration boundaries change.",
         ]
     )
+
+
+def _python_blueprint_asset_lines(python_plan: PythonDiagramPlan | None) -> list[str]:
+    if python_plan is None:
+        return []
+
+    lines = [
+        "- Supplemental Python diagrams after `archility render`:",
+    ]
+    for output in python_plan.pydeps_outputs:
+        lines.append(f"  - `docs/diagrams/{output.name}` via `pydeps`")
+    for source in python_plan.pyreverse_sources:
+        lines.append(f"  - `docs/diagrams/{source.name}` via `pyreverse`")
+        lines.append(f"  - `docs/diagrams/{source.name}.svg`")
+        lines.append(f"  - `docs/diagrams/{source.name}.png`")
+    return lines
 
 
 def _alias_for(index: int) -> str:
