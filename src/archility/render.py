@@ -43,16 +43,31 @@ class PythonDiagramPlan:
     pyreverse_sources: tuple[Path, ...]
 
     @property
+    def project_name(self) -> str:
+        return _safe_project_name(self.repo_root.name)
+
+    @property
     def pyreverse_render_outputs(self) -> tuple[Path, ...]:
         outputs: list[Path] = []
-        for source in self.pyreverse_sources:
+        for source, produced_stem in zip(
+            self.pyreverse_sources,
+            self.pyreverse_produced_stems,
+            strict=True,
+        ):
             outputs.extend(
                 [
-                    Path(str(source) + ".svg"),
-                    Path(str(source) + ".png"),
+                    source.parent / f"{produced_stem}.svg",
+                    source.parent / f"{produced_stem}.png",
                 ]
             )
         return tuple(outputs)
+
+    @property
+    def pyreverse_produced_stems(self) -> tuple[str, ...]:
+        stems = [f"classes_{self.project_name}"]
+        if len(self.pyreverse_sources) > 1:
+            stems.append(f"packages_{self.project_name}")
+        return tuple(stems)
 
 
 def package_repo_root() -> Path:
@@ -131,8 +146,12 @@ def build_render_steps(repo_path: str | Path, *, archility_root: Path | None = N
         pyreverse_step = _build_pyreverse_step(python_plan, pyreverse_bin)
         if pyreverse_step is not None:
             steps.append(pyreverse_step)
-            for source in python_plan.pyreverse_sources:
-                steps.extend(_build_plantuml_render_steps(source, plantuml_bin))
+            for source, produced_stem in zip(
+                python_plan.pyreverse_sources,
+                python_plan.pyreverse_produced_stems,
+                strict=True,
+            ):
+                steps.extend(_build_plantuml_render_steps(source, plantuml_bin, produced_stem=produced_stem))
         steps.extend(_build_pydeps_steps(python_plan, pydeps_bin))
 
     return steps
@@ -184,21 +203,27 @@ def format_render_plan(repo_path: str | Path, steps: list[RenderStep]) -> str:
     return "\n".join(lines)
 
 
-def _build_plantuml_render_steps(source: Path, plantuml_bin: str) -> list[RenderStep]:
+def _build_plantuml_render_steps(
+    source: Path,
+    plantuml_bin: str,
+    *,
+    produced_stem: str | None = None,
+) -> list[RenderStep]:
     source_str = str(source)
+    produced_base = source.with_suffix("") if produced_stem is None else source.parent / produced_stem
     return [
         _single_output_step(
             tool="plantuml",
             source=source_str,
             output=source_str + ".svg",
-            produced_output=str(source.with_suffix(".svg")),
+            produced_output=str(produced_base.with_suffix(".svg")),
             command=[plantuml_bin, "-tsvg", source_str],
         ),
         _single_output_step(
             tool="plantuml",
             source=source_str,
             output=source_str + ".png",
-            produced_output=str(source.with_suffix(".png")),
+            produced_output=str(produced_base.with_suffix(".png")),
             command=[plantuml_bin, "-tpng", source_str],
         ),
     ]
@@ -257,7 +282,7 @@ def _build_pyreverse_step(plan: PythonDiagramPlan, pyreverse_bin: str) -> Render
     if not plan.targets:
         return None
 
-    project_name = _safe_project_name(plan.repo_root.name)
+    project_name = plan.project_name
     relative_targets = [str(target.relative_to(plan.repo_root)) for target in plan.targets]
     output_directory = str(diagram_root(plan.repo_root).relative_to(plan.repo_root))
     source_roots = sorted(
@@ -266,9 +291,7 @@ def _build_pyreverse_step(plan: PythonDiagramPlan, pyreverse_bin: str) -> Render
             for target in plan.targets
         }
     )
-    produced_outputs = [diagram_root(plan.repo_root) / f"classes_{project_name}.puml"]
-    if len(plan.pyreverse_sources) > 1:
-        produced_outputs.append(diagram_root(plan.repo_root) / f"packages_{project_name}.puml")
+    produced_outputs = [diagram_root(plan.repo_root) / f"{stem}.puml" for stem in plan.pyreverse_produced_stems]
 
     return RenderStep(
         tool="pyreverse",

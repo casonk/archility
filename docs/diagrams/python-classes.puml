@@ -1,0 +1,45 @@
+@startuml classes_archility
+set namespaceSeparator none
+class "GenerateResult" as archility.generate.GenerateResult {
+  created : list[str]
+  path : str
+  rendered : list[str]
+  skipped : list[str]
+  to_dict() -> dict[str, object]
+}
+class "PythonDiagramPlan" as archility.render.PythonDiagramPlan {
+  project_name : str
+  pydeps_outputs : tuple[Path, ...]
+  pyreverse_produced_stems : tuple[str, ...]
+  pyreverse_render_outputs : tuple[Path, ...]
+  pyreverse_sources : tuple[Path, ...]
+  repo_root : Path
+  targets : tuple[Path, ...]
+}
+class "RenderStep" as archility.render.RenderStep {
+  command : list[str]
+  cwd : str | None
+  output : str
+  outputs : tuple[str, ...]
+  produced_output : str
+  produced_outputs : tuple[str, ...]
+  source : str
+  tool : str
+}
+class "RepoAudit" as archility.audit.RepoAudit {
+  code_like : bool
+  diagram_count : int
+  diagram_formats : list[str]
+  diagram_source_count : int
+  has_agents : bool
+  has_blueprint : bool
+  has_lessons : bool
+  path : str
+  recommendations : list[str]
+  render_artifact_count : int
+  source_roots : list[str]
+  toolchains : list[str]
+  workflow_count : int
+  to_dict() -> dict[str, object]
+}
+@enduml

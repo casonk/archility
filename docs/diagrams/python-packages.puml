@@ -1,0 +1,25 @@
+@startuml packages_archility
+set namespaceSeparator none
+package "archility" as archility {
+}
+package "archility.__main__" as archility.__main__ {
+}
+package "archility.audit" as archility.audit {
+}
+package "archility.cli" as archility.cli {
+}
+package "archility.generate" as archility.generate {
+}
+package "archility.render" as archility.render {
+}
+archility --> archility.audit
+archility --> archility.generate
+archility --> archility.render
+archility.__main__ --> archility.cli
+archility.cli --> archility.audit
+archility.cli --> archility.generate
+archility.cli --> archility.render
+archility.generate --> archility.audit
+archility.generate --> archility.render
+archility.render --> archility.audit
+@enduml
