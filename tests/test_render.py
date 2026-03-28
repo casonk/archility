@@ -3,12 +3,29 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from xml.etree import ElementTree
 
 from archility.cli import main
 from archility.render import build_render_steps, format_render_plan, run_render_steps
 
 
 class RenderTests(unittest.TestCase):
+    def _edge_points(self, drawio: str, edge_id: int) -> list[tuple[int, int]]:
+        document = ElementTree.fromstring(drawio)
+        for cell in document.iter("mxCell"):
+            if cell.attrib.get("id") != str(edge_id):
+                continue
+            geometry = cell.find("mxGeometry")
+            self.assertIsNotNone(geometry, f"edge {edge_id} is missing geometry")
+            points = geometry.find("Array")
+            if points is None:
+                return []
+            return [
+                (int(float(point.attrib["x"])), int(float(point.attrib["y"])))
+                for point in points.findall("mxPoint")
+            ]
+        self.fail(f"edge {edge_id} not found")
+
     def test_build_render_steps_for_puml_and_drawio_sources(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = Path(tmp) / "demo"
@@ -230,6 +247,122 @@ class RenderTests(unittest.TestCase):
             self.assertTrue((repo_root / "docs" / "diagrams" / "repo-architecture.puml.png").exists())
             self.assertFalse((repo_root / "docs" / "diagrams" / "repo-architecture.svg").exists())
             self.assertFalse((repo_root / "docs" / "diagrams" / "repo-architecture.png").exists())
+
+    def test_run_render_steps_normalizes_drawio_edge_styles_before_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp) / "demo"
+            (repo_root / "docs" / "diagrams").mkdir(parents=True)
+            source = repo_root / "docs" / "diagrams" / "repo-architecture.drawio"
+            source.write_text(
+                """<?xml version="1.0" encoding="utf-8"?>
+<mxfile host="app.diagrams.net">
+  <diagram id="repo-architecture" name="Repo Architecture">
+    <mxGraphModel>
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="10" vertex="1" parent="1">
+          <mxGeometry x="520" y="120" width="180" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="20" vertex="1" parent="1">
+          <mxGeometry x="60" y="120" width="180" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="30" vertex="1" parent="1">
+          <mxGeometry x="260" y="120" width="180" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="500" style="rounded=0;html=0;strokeColor=#1F2937;" edge="1" parent="1" source="10" target="20">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="501" style="rounded=0;html=0;strokeColor=#1F2937;" edge="1" parent="1" source="10" target="30">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
+""",
+                encoding="utf-8",
+            )
+            tool_root = repo_root / "tool-home" / "tools" / "bin"
+            tool_root.mkdir(parents=True)
+            (tool_root / "drawio").write_text("#!/usr/bin/env bash\n")
+
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
+
+            def runner(command: list[str], cwd: str | None) -> None:
+                output = Path(command[command.index("-o") + 1])
+                output.write_text("<svg />\n" if output.suffix == ".svg" else "png\n")
+
+            run_render_steps(steps, runner=runner)
+
+            normalized = source.read_text(encoding="utf-8")
+            self.assertIn("jumpStyle=arc", normalized)
+            self.assertIn("jumpSize=10", normalized)
+            edge_500 = self._edge_points(normalized, 500)
+            edge_501 = self._edge_points(normalized, 501)
+            self.assertGreaterEqual(len(edge_500), 2)
+            self.assertGreaterEqual(len(edge_501), 2)
+            self.assertNotEqual(edge_500, edge_501)
+            self.assertNotEqual(edge_500[1][1], edge_501[1][1])
+            self.assertTrue((repo_root / "docs" / "diagrams" / "repo-architecture.drawio.svg").exists())
+            self.assertTrue((repo_root / "docs" / "diagrams" / "repo-architecture.drawio.png").exists())
+
+    def test_run_render_steps_routes_drawio_edges_through_open_corridors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp) / "demo"
+            (repo_root / "docs" / "diagrams").mkdir(parents=True)
+            source = repo_root / "docs" / "diagrams" / "repo-architecture.drawio"
+            source.write_text(
+                """<?xml version="1.0" encoding="utf-8"?>
+<mxfile host="app.diagrams.net">
+  <diagram id="repo-architecture" name="Repo Architecture">
+    <mxGraphModel>
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="10" vertex="1" parent="1">
+          <mxGeometry x="720" y="500" width="180" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="20" vertex="1" parent="1">
+          <mxGeometry x="60" y="260" width="180" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="30" vertex="1" parent="1">
+          <mxGeometry x="280" y="260" width="180" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="40" vertex="1" parent="1">
+          <mxGeometry x="500" y="260" width="180" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="500" style="rounded=0;html=0;strokeColor=#1F2937;" edge="1" parent="1" source="10" target="20">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
+""",
+                encoding="utf-8",
+            )
+            tool_root = repo_root / "tool-home" / "tools" / "bin"
+            tool_root.mkdir(parents=True)
+            (tool_root / "drawio").write_text("#!/usr/bin/env bash\n")
+
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
+
+            def runner(command: list[str], cwd: str | None) -> None:
+                output = Path(command[command.index("-o") + 1])
+                output.write_text("<svg />\n" if output.suffix == ".svg" else "png\n")
+
+            run_render_steps(steps, runner=runner)
+
+            normalized = source.read_text(encoding="utf-8")
+            edge_500 = self._edge_points(normalized, 500)
+            self.assertGreaterEqual(len(edge_500), 3)
+            corridor_y = next(
+                (first[1] for first, second in zip(edge_500, edge_500[1:]) if first[1] == second[1]),
+                None,
+            )
+            self.assertIsNotNone(corridor_y)
+            self.assertTrue(corridor_y < 260 or corridor_y > 360)
 
     def test_run_render_steps_renames_pyreverse_outputs_and_renders_generated_sources(self):
         with tempfile.TemporaryDirectory() as tmp:

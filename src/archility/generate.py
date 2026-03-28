@@ -49,6 +49,38 @@ class GenerateResult:
         return asdict(self)
 
 
+@dataclass(frozen=True, slots=True)
+class DrawioBounds:
+    x: int
+    y: int
+    width: int
+    height: int
+
+    @property
+    def left(self) -> int:
+        return self.x
+
+    @property
+    def right(self) -> int:
+        return self.x + self.width
+
+    @property
+    def top(self) -> int:
+        return self.y
+
+    @property
+    def bottom(self) -> int:
+        return self.y + self.height
+
+    @property
+    def mid_x(self) -> int:
+        return self.x + self.width // 2
+
+    @property
+    def mid_y(self) -> int:
+        return self.y + self.height // 2
+
+
 def top_level_content_dirs(root: Path) -> list[Path]:
     return [
         path
@@ -338,14 +370,94 @@ def _drawio_vertex(cell_id: int, value: str, style: str, x: int, y: int, width: 
     )
 
 
-def _drawio_edge(cell_id: int, source: int, target: int) -> str:
+def _drawio_geometry_lines(points: list[tuple[int, int]] | None) -> list[str]:
+    if not points:
+        return ['          <mxGeometry relative="1" as="geometry" />']
+
+    lines = [
+        '          <mxGeometry relative="1" as="geometry">',
+        '            <Array as="points">',
+    ]
+    for x, y in points:
+        lines.append(f'              <mxPoint x="{x}" y="{y}" />')
+    lines.extend(
+        [
+            "            </Array>",
+            "          </mxGeometry>",
+        ]
+    )
+    return lines
+
+
+def _drawio_edge(cell_id: int, source: int, target: int, *, points: list[tuple[int, int]] | None = None) -> str:
     return "\n".join(
         [
-            f'        <mxCell id="{cell_id}" style="rounded=0;html=0;strokeColor=#1F2937;edgeStyle=orthogonalEdgeStyle;orthogonalLoop=1;jettySize=12;endArrow=classic;endFill=1;endSize=10;strokeWidth=2;" edge="1" parent="1" source="{source}" target="{target}">',
-            '          <mxGeometry relative="1" as="geometry" />',
+            f'        <mxCell id="{cell_id}" style="rounded=0;html=0;strokeColor=#1F2937;edgeStyle=orthogonalEdgeStyle;orthogonalLoop=1;jettySize=12;endArrow=classic;endFill=1;endSize=10;strokeWidth=2;jumpStyle=arc;jumpSize=10;" edge="1" parent="1" source="{source}" target="{target}">',
+            *_drawio_geometry_lines(points),
             "        </mxCell>",
         ]
     )
+
+
+def _spread_positions(start: int, end: int, count: int) -> list[int]:
+    if count <= 0:
+        return []
+    if count == 1:
+        return [(start + end) // 2]
+    span = end - start
+    return [start + round(span * index / (count - 1)) for index in range(count)]
+
+
+def _drawio_top_fanout_routes(
+    source: DrawioBounds,
+    targets: list[DrawioBounds],
+    *,
+    lane_clearance: int,
+    lane_gap: int,
+) -> list[list[tuple[int, int]]]:
+    exit_xs = _spread_positions(source.left + 44, source.right - 44, len(targets))
+    row_lane_counts: dict[int, int] = {}
+    routes: list[list[tuple[int, int]]] = []
+    for target, exit_x in zip(targets, exit_xs):
+        row_lane_index = row_lane_counts.get(target.top, 0)
+        row_lane_counts[target.top] = row_lane_index + 1
+        lane_y = target.top - lane_clearance - row_lane_index * lane_gap
+        routes.append(
+            [
+                (exit_x, source.bottom + 24),
+                (exit_x, lane_y),
+                (target.mid_x, lane_y),
+            ]
+        )
+    return routes
+
+
+def _drawio_left_fanout_routes(
+    source: DrawioBounds,
+    targets: list[DrawioBounds],
+    *,
+    lane_clearance: int,
+    lane_gap: int,
+    lateral_clearance: int = 48,
+    lateral_gap: int = 14,
+) -> list[list[tuple[int, int]]]:
+    exit_xs = _spread_positions(source.left + 44, source.right - 44, len(targets))
+    row_lane_counts: dict[int, int] = {}
+    routes: list[list[tuple[int, int]]] = []
+    for target, exit_x in zip(targets, exit_xs):
+        row_lane_index = row_lane_counts.get(target.top, 0)
+        row_lane_counts[target.top] = row_lane_index + 1
+        lane_y = target.top - lane_clearance - row_lane_index * lane_gap
+        lane_x = target.left - lateral_clearance - row_lane_index * lateral_gap
+        routes.append(
+            [
+                (exit_x, source.bottom + 24),
+                (exit_x, lane_y),
+                (lane_x, lane_y),
+                (lane_x, target.mid_y),
+            ]
+        )
+    return routes
 
 
 def build_drawio_text(repo_root: Path) -> str:
@@ -353,6 +465,13 @@ def build_drawio_text(repo_root: Path) -> str:
     focus_roots = detect_focus_roots(repo_root)
     course_groups = detect_course_taxonomy(repo_root)
     workflow_label = ".github/workflows/" if (repo_root / ".github" / "workflows").exists() else "workflow coverage not added yet"
+    bounds_by_cell_id = {
+        10: DrawioBounds(80, 150, 240, 90),
+        20: DrawioBounds(380, 150, 300, 120),
+        30: DrawioBounds(760, 150, 330, 90),
+        40: DrawioBounds(1170, 150, 330, 110),
+        50: DrawioBounds(1170, 310, 330, 90),
+    }
 
     cells = [
         _drawio_header_cell(repo_name),
@@ -429,10 +548,31 @@ def build_drawio_text(repo_root: Path) -> str:
                 ),
             ]
         )
+        bounds_by_cell_id[60] = DrawioBounds(80, 470, 560, 110)
+        bounds_by_cell_id[70] = DrawioBounds(720, 470, 780, 110)
         edges.extend(
             [
-                _drawio_edge(503, 40, 60),
-                _drawio_edge(504, 50, 60),
+                _drawio_edge(
+                    503,
+                    40,
+                    60,
+                    points=[
+                        (1290, bounds_by_cell_id[40].bottom + 24),
+                        (1290, 420),
+                        (bounds_by_cell_id[60].mid_x, 420),
+                    ],
+                ),
+                _drawio_edge(
+                    504,
+                    50,
+                    60,
+                    points=[
+                        (1390, bounds_by_cell_id[50].bottom + 24),
+                        (1390, 620),
+                        (680, 620),
+                        (680, bounds_by_cell_id[60].mid_y),
+                    ],
+                ),
                 _drawio_edge(505, 60, 70),
             ]
         )
@@ -456,23 +596,39 @@ def build_drawio_text(repo_root: Path) -> str:
             row_offsets[row] = next_row_y
             next_row_y += row_heights[row] + y_gap
 
+        subject_area_ids: list[int] = []
         for index, (prefix, courses) in enumerate(group_items):
             row = index // columns
             column = index % columns
             cell_id = 100 + index
+            cell_bounds = DrawioBounds(
+                x_base + column * x_step,
+                row_offsets[row],
+                box_width,
+                max(150, 50 + (2 + len(courses)) * 18),
+            )
             value = "\n".join([f"Subject Area", f'{prefix} ({len(courses)} {"course" if len(courses) == 1 else "courses"})', *courses])
             cells.append(
                 _drawio_vertex(
                     cell_id,
                     value,
                     "rounded=1;whiteSpace=wrap;html=0;fillColor=#EEF7FF;strokeColor=#0284C7;fontColor=#111827;fontSize=16;align=left;verticalAlign=top;spacing=10;",
-                    x_base + column * x_step,
-                    row_offsets[row],
-                    box_width,
-                    max(150, 50 + (2 + len(courses)) * 18),
+                    cell_bounds.x,
+                    cell_bounds.y,
+                    cell_bounds.width,
+                    cell_bounds.height,
                 )
             )
-            edges.append(_drawio_edge(520 + index, 60, cell_id))
+            bounds_by_cell_id[cell_id] = cell_bounds
+            subject_area_ids.append(cell_id)
+        subject_area_routes = _drawio_top_fanout_routes(
+            bounds_by_cell_id[60],
+            [bounds_by_cell_id[cell_id] for cell_id in subject_area_ids],
+            lane_clearance=34,
+            lane_gap=14,
+        )
+        for index, (cell_id, route) in enumerate(zip(subject_area_ids, subject_area_routes)):
+            edges.append(_drawio_edge(520 + index, 60, cell_id, points=route))
         page_height = next_row_y + 80
     else:
         root_ids: list[int] = []
@@ -481,20 +637,41 @@ def build_drawio_text(repo_root: Path) -> str:
         for index, root_name in enumerate(focus_roots):
             cell_id = next_id + index
             root_ids.append(cell_id)
+            cell_bounds = DrawioBounds(
+                220 + (index % 3) * 420,
+                root_y + (index // 3) * 140,
+                320,
+                90,
+            )
             cells.append(
                 _drawio_vertex(
                     cell_id,
                     f"Focus Root\n{root_name}/",
                     "rounded=1;whiteSpace=wrap;html=0;fillColor=#E0F2FE;strokeColor=#0284C7;fontColor=#111827;fontSize=18;align=center;verticalAlign=middle;spacing=8;",
-                    220 + (index % 3) * 420,
-                    root_y + (index // 3) * 140,
-                    320,
-                    90,
+                    cell_bounds.x,
+                    cell_bounds.y,
+                    cell_bounds.width,
+                    cell_bounds.height,
                 )
             )
-        for offset, root_id in enumerate(root_ids, start=1):
-            edges.append(_drawio_edge(510 + offset, 40, root_id))
-            edges.append(_drawio_edge(520 + offset, 50, root_id))
+            bounds_by_cell_id[cell_id] = cell_bounds
+        root_bounds = [bounds_by_cell_id[root_id] for root_id in root_ids]
+        diagram_source_routes = _drawio_top_fanout_routes(
+            bounds_by_cell_id[40],
+            root_bounds,
+            lane_clearance=58,
+            lane_gap=18,
+        )
+        automation_routes = _drawio_left_fanout_routes(
+            bounds_by_cell_id[50],
+            root_bounds,
+            lane_clearance=26,
+            lane_gap=18,
+        )
+        for offset, (root_id, route) in enumerate(zip(root_ids, diagram_source_routes), start=1):
+            edges.append(_drawio_edge(510 + offset, 40, root_id, points=route))
+        for offset, (root_id, route) in enumerate(zip(root_ids, automation_routes), start=1):
+            edges.append(_drawio_edge(520 + offset, 50, root_id, points=route))
 
     xml_lines = [
         "<?xml version='1.0' encoding='utf-8'?>",
