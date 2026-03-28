@@ -126,6 +126,63 @@ class RenderTests(unittest.TestCase):
                 str(repo_root / "docs" / "diagrams" / "python-import-deps-src-demo.svg"),
             )
 
+    def test_build_render_steps_for_multiple_python_modules_adds_package_diagram(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp) / "demo-repo"
+            (repo_root / "docs" / "diagrams").mkdir(parents=True)
+            (repo_root / "pyproject.toml").write_text('[project]\nname = "demo-repo"\n')
+            (repo_root / "scripts").mkdir()
+            (repo_root / "scripts" / "alpha.py").write_text("import beta\n")
+            (repo_root / "beta.py").write_text("VALUE = 1\n")
+
+            steps = build_render_steps(repo_root, archility_root=Path("/tool-home"))
+
+            self.assertEqual(steps[0].tool, "pyreverse")
+            self.assertEqual(
+                steps[0].outputs,
+                (
+                    str(repo_root / "docs" / "diagrams" / "python-classes.puml"),
+                    str(repo_root / "docs" / "diagrams" / "python-packages.puml"),
+                ),
+            )
+            self.assertEqual(
+                steps[0].produced_outputs,
+                (
+                    str(repo_root / "docs" / "diagrams" / "classes_demo-repo.puml"),
+                    str(repo_root / "docs" / "diagrams" / "packages_demo-repo.puml"),
+                ),
+            )
+            self.assertIn(
+                [
+                    "/tool-home/tools/bin/pydeps",
+                    "--no-config",
+                    "--noshow",
+                    "--max-bacon",
+                    "0",
+                    "-T",
+                    "svg",
+                    "-o",
+                    "docs/diagrams/python-import-deps-beta.svg",
+                    "beta.py",
+                ],
+                [step.command for step in steps if step.tool == "pydeps"],
+            )
+            self.assertIn(
+                [
+                    "/tool-home/tools/bin/pydeps",
+                    "--no-config",
+                    "--noshow",
+                    "--max-bacon",
+                    "0",
+                    "-T",
+                    "svg",
+                    "-o",
+                    "docs/diagrams/python-import-deps-scripts-alpha.svg",
+                    "scripts/alpha.py",
+                ],
+                [step.command for step in steps if step.tool == "pydeps"],
+            )
+
     def test_format_render_plan_for_empty_repo(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = Path(tmp)

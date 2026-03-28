@@ -90,7 +90,7 @@ def build_python_diagram_plan(repo_path: str | Path) -> PythonDiagramPlan | None
         for target in targets
     )
     pyreverse_sources: list[Path] = [root / "python-classes.puml"]
-    if any(_is_package_target(target) for target in targets):
+    if len(targets) > 1 or any(_is_package_target(target) for target in targets):
         pyreverse_sources.append(root / "python-packages.puml")
     return PythonDiagramPlan(
         repo_root=repo_root,
