@@ -28,6 +28,7 @@ PYTHON_EXCLUDED_DIRS = {
     "tools",
     "venv",
 }
+PYTHON_EXCLUDED_TARGET_NAMES = {"test", "tests"}
 SOURCE_DIAGRAM_SUFFIXES = {
     ".drawio",
     ".puml",
@@ -124,6 +125,8 @@ def _direct_python_targets(container: Path) -> list[Path]:
     targets: list[Path] = []
     for child in sorted(container.iterdir(), key=lambda entry: entry.name):
         if _should_skip_python_scan(child):
+            continue
+        if child.stem in PYTHON_EXCLUDED_TARGET_NAMES:
             continue
         if _is_python_package(child) or (child.is_file() and child.suffix == ".py"):
             targets.append(child)

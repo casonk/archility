@@ -1,17 +1,13 @@
 @startuml packages_archility
 set namespaceSeparator none
-package "archility" as archility {
-}
-package "archility.__main__" as archility.__main__ {
-}
-package "archility.audit" as archility.audit {
-}
-package "archility.cli" as archility.cli {
-}
-package "archility.generate" as archility.generate {
-}
-package "archility.render" as archility.render {
-}
+top to bottom direction
+skinparam componentStyle rectangle
+rectangle "archility\n0 child pkg, 5 modules\n6 python files\nexamples: __main__, audit, cli" as archility
+rectangle "archility.__main__\n1 python file" as archility.__main__
+rectangle "archility.audit\n1 python file" as archility.audit
+rectangle "archility.cli\n1 python file" as archility.cli
+rectangle "archility.generate\n1 python file" as archility.generate
+rectangle "archility.render\n1 python file" as archility.render
 archility --> archility.audit
 archility --> archility.generate
 archility --> archility.render

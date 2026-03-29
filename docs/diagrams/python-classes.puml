@@ -40,6 +40,13 @@ class "PythonDiagramPlan" as archility.render.PythonDiagramPlan {
   repo_root : Path
   targets : tuple[Path, ...]
 }
+class "PythonModuleInfo" as archility.render.PythonModuleInfo {
+  class_count : int
+  function_count : int
+  is_package : bool
+  name : str
+  path : Path
+}
 class "RenderStep" as archility.render.RenderStep {
   command : list[str]
   cwd : str | None
