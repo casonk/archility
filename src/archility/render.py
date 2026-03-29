@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
 import io
 from pathlib import Path
@@ -20,6 +21,7 @@ DRAWIO_EDGE_STYLE_DEFAULTS = (
     ("jumpStyle", "arc"),
     ("jumpSize", "10"),
 )
+LOW_SIGNAL_PYREVERSE_CLASS_THRESHOLD = 1
 RunCommand = Callable[[list[str], str | None], None]
 
 
@@ -106,6 +108,15 @@ class PythonDiagramPlan:
         if len(self.pyreverse_sources) > 1:
             stems.append(f"packages_{self.project_name}")
         return tuple(stems)
+
+
+@dataclass(frozen=True, slots=True)
+class PythonModuleInfo:
+    name: str
+    path: Path
+    is_package: bool
+    class_count: int
+    function_count: int
 
 
 def package_repo_root() -> Path:
@@ -222,6 +233,8 @@ def run_render_steps(steps: list[RenderStep], *, runner: RunCommand | None = Non
         execute(step.command, step.cwd)
         for produced_output, target_output in zip(step.produced_outputs, step.outputs, strict=True):
             _ensure_step_output(step.source, Path(produced_output), Path(target_output))
+        if step.tool == "pyreverse":
+            _normalize_pyreverse_outputs(step)
 
 
 def _default_runner(command: list[str], cwd: str | None) -> None:
@@ -412,6 +425,198 @@ def _managed_pyreverse_filenames(repo_root: Path) -> set[str]:
         f"classes_{project_name}.puml",
         f"packages_{project_name}.puml",
     }
+
+
+def _normalize_pyreverse_outputs(step: RenderStep) -> None:
+    if step.cwd is None:
+        return
+
+    repo_root = Path(step.cwd)
+    module_info = _collect_python_module_info(repo_root)
+    python_plan = build_python_diagram_plan(repo_root)
+
+    for output in (Path(path) for path in step.outputs):
+        if not output.exists():
+            continue
+        if output.name == "python-packages.puml":
+            _normalize_pyreverse_package_source(output, module_info)
+            continue
+        if output.name == "python-classes.puml":
+            _normalize_pyreverse_class_source(
+                output,
+                module_info=module_info,
+                pydeps_outputs=tuple(python_plan.pydeps_outputs) if python_plan is not None else (),
+                repo_root=repo_root,
+            )
+
+
+def _collect_python_module_info(repo_root: Path) -> dict[str, PythonModuleInfo]:
+    module_info: dict[str, PythonModuleInfo] = {}
+    for target in collect_python_diagram_targets(repo_root):
+        source_root = _pyreverse_source_root(target)
+        for path in _iter_python_files_for_target(target):
+            module_name = _python_module_name(source_root, path)
+            if module_name in module_info:
+                continue
+            class_count, function_count = _count_top_level_python_symbols(path)
+            module_info[module_name] = PythonModuleInfo(
+                name=module_name,
+                path=path,
+                is_package=path.name == "__init__.py",
+                class_count=class_count,
+                function_count=function_count,
+            )
+    return module_info
+
+
+def _iter_python_files_for_target(target: Path) -> list[Path]:
+    if target.is_file():
+        return [target]
+    return sorted(
+        (
+            path
+            for path in target.rglob("*.py")
+            if path.is_file() and "__pycache__" not in path.parts
+        ),
+        key=str,
+    )
+
+
+def _python_module_name(source_root: Path, path: Path) -> str:
+    relative = path.relative_to(source_root).with_suffix("")
+    parts = list(relative.parts)
+    if parts and parts[-1] == "__init__":
+        parts = parts[:-1]
+    return ".".join(parts)
+
+
+def _count_top_level_python_symbols(path: Path) -> tuple[int, int]:
+    try:
+        module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, SyntaxError, UnicodeDecodeError):
+        return (0, 0)
+
+    class_count = 0
+    function_count = 0
+    for node in module.body:
+        if isinstance(node, ast.ClassDef):
+            class_count += 1
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            function_count += 1
+    return (class_count, function_count)
+
+
+def _normalize_pyreverse_package_source(
+    source: Path,
+    module_info: dict[str, PythonModuleInfo],
+) -> None:
+    text = source.read_text(encoding="utf-8")
+    startuml, nodes, edges = _parse_pyreverse_package_source(text)
+    if not nodes:
+        return
+
+    lines = [
+        startuml,
+        "set namespaceSeparator none",
+        "top to bottom direction",
+        "skinparam componentStyle rectangle",
+    ]
+    for label, alias in nodes:
+        lines.append(f'rectangle "{_escape_plantuml_label(_python_package_summary_label(label, module_info))}" as {alias}')
+    lines.extend(edges)
+    lines.append("@enduml")
+    source.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _normalize_pyreverse_class_source(
+    source: Path,
+    *,
+    module_info: dict[str, PythonModuleInfo],
+    pydeps_outputs: tuple[Path, ...],
+    repo_root: Path,
+) -> None:
+    text = source.read_text(encoding="utf-8")
+    if _count_pyreverse_class_entities(text) > LOW_SIGNAL_PYREVERSE_CLASS_THRESHOLD:
+        return
+
+    module_count = len(module_info)
+    pydeps_names = ", ".join(path.name for path in pydeps_outputs)
+    note_lines = [
+        "note as archilityPythonSurfaceNote",
+        "Minimal class surface detected.",
+        f"Scanned {module_count} Python module{'s' if module_count != 1 else ''}.",
+    ]
+    if pydeps_names:
+        note_lines.append(f"See {pydeps_names} for module-level imports.")
+    note_lines.append("end note")
+    normalized = text.rstrip()
+    if normalized.endswith("@enduml"):
+        normalized = normalized[: -len("@enduml")].rstrip()
+    source.write_text(normalized + "\n" + "\n".join(note_lines) + "\n@enduml\n", encoding="utf-8")
+
+
+def _parse_pyreverse_package_source(text: str) -> tuple[str, list[tuple[str, str]], list[str]]:
+    startuml = "@startuml packages"
+    nodes: list[tuple[str, str]] = []
+    edges: list[str] = []
+    package_pattern = re.compile(r'^package "([^"]+)" as ([^ ]+) \{$')
+    edge_pattern = re.compile(r"^[A-Za-z0-9_.-]+ --> [A-Za-z0-9_.-]+$")
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("@startuml"):
+            startuml = line
+            continue
+        package_match = package_pattern.match(line)
+        if package_match is not None:
+            nodes.append((package_match.group(1), package_match.group(2)))
+            continue
+        if edge_pattern.match(line):
+            edges.append(line)
+    return (startuml, nodes, edges)
+
+
+def _python_package_summary_label(package_name: str, module_info: dict[str, PythonModuleInfo]) -> str:
+    direct_children: list[PythonModuleInfo] = []
+    prefix = f"{package_name}."
+    for info in module_info.values():
+        if info.name == package_name:
+            continue
+        if not info.name.startswith(prefix):
+            continue
+        remainder = info.name[len(prefix) :]
+        if "." in remainder:
+            continue
+        direct_children.append(info)
+
+    package_modules = sum(
+        1
+        for info in module_info.values()
+        if info.name == package_name or info.name.startswith(prefix)
+    )
+    child_package_count = sum(1 for info in direct_children if info.is_package)
+    child_module_count = sum(1 for info in direct_children if not info.is_package)
+    child_names = [info.name.rsplit(".", 1)[-1] for info in direct_children[:3]]
+
+    summary_lines = [package_name]
+    if direct_children:
+        summary_lines.append(
+            f"{child_package_count} child pkg, {child_module_count} module{'s' if child_module_count != 1 else ''}"
+        )
+    summary_lines.append(f"{package_modules} python file{'s' if package_modules != 1 else ''}")
+    if child_names:
+        summary_lines.append("examples: " + ", ".join(child_names))
+    return "\n".join(summary_lines)
+
+
+def _count_pyreverse_class_entities(text: str) -> int:
+    return sum(1 for line in text.splitlines() if line.lstrip().startswith('class "'))
+
+
+def _escape_plantuml_label(label: str) -> str:
+    return label.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
 def _normalize_drawio_sources(steps: list[RenderStep]) -> None:

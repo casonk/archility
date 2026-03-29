@@ -5,7 +5,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from archility.audit import audit_repo
+from archility.audit import audit_repo, collect_python_diagram_targets
 from archility.cli import main
 
 
@@ -87,6 +87,24 @@ class AuditTests(unittest.TestCase):
             result = audit_repo(root)
 
             self.assertEqual(result.toolchains, ['pydeps', 'pyreverse'])
+
+    def test_collect_python_diagram_targets_excludes_tests_packages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'pyproject.toml').write_text('[project]\nname = "demo"\n')
+            (root / 'src' / 'demo').mkdir(parents=True)
+            (root / 'src' / 'demo' / '__init__.py').write_text('')
+            (root / 'src' / 'demo' / 'core.py').write_text('VALUE = 1\n')
+            (root / 'tests').mkdir()
+            (root / 'tests' / '__init__.py').write_text('')
+            (root / 'tests' / 'test_demo.py').write_text('def test_value() -> None:\n    pass\n')
+
+            targets = collect_python_diagram_targets(root)
+
+            self.assertEqual(
+                [target.relative_to(root).as_posix() for target in targets],
+                ['src/demo'],
+            )
 
     def test_cli_json_output(self):
         with tempfile.TemporaryDirectory() as tmp:

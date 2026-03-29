@@ -414,6 +414,94 @@ class RenderTests(unittest.TestCase):
             self.assertFalse((repo_root / "docs" / "diagrams" / "classes_demo.puml").exists())
             self.assertFalse((repo_root / "docs" / "diagrams" / "packages_demo.puml").exists())
 
+    def test_run_render_steps_adds_low_signal_note_for_python_classes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp) / "demo"
+            (repo_root / "docs" / "diagrams").mkdir(parents=True)
+            (repo_root / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+            (repo_root / "refresh.py").write_text(
+                "def refresh() -> None:\n"
+                "    pass\n",
+            )
+            tool_root = repo_root / "tool-home" / "tools" / "bin"
+            tool_root.mkdir(parents=True)
+            for tool_name in ("plantuml", "pydeps", "pyreverse"):
+                (tool_root / tool_name).write_text("#!/usr/bin/env bash\n")
+
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
+
+            def runner(command: list[str], cwd: str | None) -> None:
+                if command[0].endswith("pyreverse"):
+                    (repo_root / "docs" / "diagrams" / "classes_demo.puml").write_text(
+                        '@startuml classes_demo\nclass "refresh.RefreshJob" as refresh.RefreshJob\n@enduml\n'
+                    )
+                elif command[0].endswith("pydeps"):
+                    (repo_root / "docs" / "diagrams" / "python-import-deps-refresh.svg").write_text("<svg />\n")
+                elif "-tsvg" in command:
+                    (repo_root / "docs" / "diagrams" / "classes_demo.svg").write_text("<svg />\n")
+                elif "-tpng" in command:
+                    (repo_root / "docs" / "diagrams" / "classes_demo.png").write_text("png\n")
+
+            run_render_steps(steps, runner=runner)
+
+            normalized = (repo_root / "docs" / "diagrams" / "python-classes.puml").read_text(encoding="utf-8")
+            self.assertIn("Minimal class surface detected.", normalized)
+            self.assertIn("Scanned 1 Python module.", normalized)
+            self.assertIn("python-import-deps-refresh.svg", normalized)
+
+    def test_run_render_steps_rewrites_package_diagram_with_package_summaries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp) / "demo"
+            (repo_root / "docs" / "diagrams").mkdir(parents=True)
+            (repo_root / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+            (repo_root / "src" / "demo").mkdir(parents=True)
+            (repo_root / "src" / "demo" / "__init__.py").write_text("")
+            (repo_root / "src" / "demo" / "cli.py").write_text("def main() -> None:\n    pass\n")
+            (repo_root / "src" / "demo" / "core.py").write_text("VALUE = 1\n")
+            tool_root = repo_root / "tool-home" / "tools" / "bin"
+            tool_root.mkdir(parents=True)
+            for tool_name in ("plantuml", "pydeps", "pyreverse"):
+                (tool_root / tool_name).write_text("#!/usr/bin/env bash\n")
+
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
+
+            def runner(command: list[str], cwd: str | None) -> None:
+                if command[0].endswith("pyreverse"):
+                    (repo_root / "docs" / "diagrams" / "classes_demo.puml").write_text("@startuml\n@enduml\n")
+                    (repo_root / "docs" / "diagrams" / "packages_demo.puml").write_text(
+                        "@startuml packages_demo\n"
+                        'package "demo" as demo {\n'
+                        "}\n"
+                        'package "demo.cli" as demo.cli {\n'
+                        "}\n"
+                        'package "demo.core" as demo.core {\n'
+                        "}\n"
+                        "demo --> demo.cli\n"
+                        "demo --> demo.core\n"
+                        "@enduml\n"
+                    )
+                elif command[0].endswith("pydeps"):
+                    (repo_root / "docs" / "diagrams" / "python-import-deps-src-demo.svg").write_text("<svg />\n")
+                elif "-tsvg" in command:
+                    source_name = Path(command[-1]).name
+                    if source_name == "python-classes.puml":
+                        (repo_root / "docs" / "diagrams" / "classes_demo.svg").write_text("<svg />\n")
+                    else:
+                        (repo_root / "docs" / "diagrams" / "packages_demo.svg").write_text("<svg />\n")
+                elif "-tpng" in command:
+                    source_name = Path(command[-1]).name
+                    if source_name == "python-classes.puml":
+                        (repo_root / "docs" / "diagrams" / "classes_demo.png").write_text("png\n")
+                    else:
+                        (repo_root / "docs" / "diagrams" / "packages_demo.png").write_text("png\n")
+
+            run_render_steps(steps, runner=runner)
+
+            normalized = (repo_root / "docs" / "diagrams" / "python-packages.puml").read_text(encoding="utf-8")
+            self.assertIn('rectangle "demo\\n0 child pkg, 2 modules\\n3 python files\\nexamples: cli, core" as demo', normalized)
+            self.assertIn('rectangle "demo.cli\\n1 python file" as demo.cli', normalized)
+            self.assertNotIn('package "demo" as demo {', normalized)
+
 
 if __name__ == "__main__":
     unittest.main()
