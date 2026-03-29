@@ -909,9 +909,8 @@ def _build_shell_graph_text(plan: ShellDiagramPlan) -> str:
             f"{local_count} local shell edge{'s' if local_count != 1 else ''}",
             f"{tool_count} external tool{'s' if tool_count != 1 else ''}",
         ]
-        lines.append(
-            f'rectangle "{_escape_plantuml_label("\\n".join(label_lines))}" as {script_aliases[path]} #DBEAFE'
-        )
+        label_text = _escape_plantuml_label("\n".join(label_lines))
+        lines.append(f'rectangle "{label_text}" as {script_aliases[path]} #DBEAFE')
     for tool_name in sorted(all_tools):
         tool_aliases[tool_name] = _unique_alias("tool", tool_name, alias_counts)
         lines.append(
