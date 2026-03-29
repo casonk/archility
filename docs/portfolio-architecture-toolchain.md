@@ -21,7 +21,11 @@
 - Keep editable diagram sources under `docs/diagrams/`.
 - Use PlantUML source files such as `.puml` or `.plantuml` when text-first diagrams are a good fit.
 - Use Draw.io source files such as `.drawio` when manual layout or template reuse is more useful.
-- For Python repos, allow `archility render` to derive supplemental `pydeps` SVG import graphs and `pyreverse` PlantUML UML diagrams under `docs/diagrams/`.
+- Allow `archility render` to derive supplemental deterministic sidecars under `docs/diagrams/` when matching source signals exist:
+  - Python: `pydeps` SVG import graphs and `pyreverse` PlantUML UML diagrams
+  - Shell: managed PlantUML shell-flow diagrams
+  - SQL/schema: managed PlantUML database-schema diagrams
+  - Tooling entrypoints: managed PlantUML tooling-integration diagrams
 - Check in rendered `.png` and/or `.svg` artifacts next to the source diagrams so contributors can review them without opening the source tool.
 - The generated `repo-architecture.puml` starter diagrams use PlantUML's Smetana layout so they can render cleanly without a local Graphviz install.
 - Keep Graphviz available through the shared `archility` bootstrap because richer or older PlantUML diagrams may still depend on `dot`.
@@ -66,7 +70,7 @@ inkscape docs/diagrams/repo-architecture.drawio.svg --export-type=png --export-f
 - `archility/setup.sh` is the shared local bootstrap for PlantUML, Draw.io, `pydeps`, `pyreverse`, Graphviz-backed PlantUML support, and related system prerequisites.
 - `archility generate <repo>` creates the standard starter blueprint and repo-architecture source files when they are missing.
 - `archility render <repo>` is the shared render entry point for target repositories regardless of whether the source diagrams were programmatically generated or agent-authored.
-- On Python repos, `archility render <repo>` also derives deterministic `pydeps` and `pyreverse` sidecar diagrams when top-level package or module targets are detected.
+- On repos with supported source signals, `archility render <repo>` also derives deterministic supplemental sidecars for Python package/module structure, shell-script flow, SQL/schema structure, and tooling integrations.
 - `archility audit` detects source diagram formats such as `.puml`, `.plantuml`, and `.drawio`.
 - It also reports render artifacts such as `.png` and `.svg`.
 - Toolchain detection is inferred from source files plus contributor-facing hints in files like `README.md`, `AGENTS.md`, `setup.sh`, and `docs/contributor-architecture-blueprint.md`.

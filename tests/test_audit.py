@@ -5,7 +5,13 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from archility.audit import audit_repo, collect_python_diagram_targets
+from archility.audit import (
+    audit_repo,
+    collect_python_diagram_targets,
+    collect_shell_diagram_targets,
+    collect_sql_diagram_targets,
+    collect_tooling_diagram_targets,
+)
 from archility.cli import main
 
 
@@ -104,6 +110,32 @@ class AuditTests(unittest.TestCase):
             self.assertEqual(
                 [target.relative_to(root).as_posix() for target in targets],
                 ['src/demo'],
+            )
+
+    def test_collect_shell_sql_and_tooling_targets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "scripts").mkdir()
+            (root / "scripts" / "deploy.sh").write_text("#!/usr/bin/env bash\ncurl https://example.com\n")
+            (root / "db").mkdir()
+            (root / "db" / "schema.sql").write_text("CREATE TABLE users (id INTEGER PRIMARY KEY);\n")
+            (root / ".github" / "workflows").mkdir(parents=True)
+            (root / ".github" / "workflows" / "ci.yml").write_text(
+                "jobs:\n  test:\n    steps:\n      - uses: actions/checkout@v4\n"
+            )
+            (root / "Dockerfile").write_text("FROM python:3.12\nRUN pip install -r requirements.txt\n")
+
+            self.assertEqual(
+                [target.relative_to(root).as_posix() for target in collect_shell_diagram_targets(root)],
+                ["scripts/deploy.sh"],
+            )
+            self.assertEqual(
+                [target.relative_to(root).as_posix() for target in collect_sql_diagram_targets(root)],
+                ["db/schema.sql"],
+            )
+            self.assertEqual(
+                [target.relative_to(root).as_posix() for target in collect_tooling_diagram_targets(root)],
+                [".github/workflows/ci.yml", "scripts/deploy.sh", "Dockerfile"],
             )
 
     def test_cli_json_output(self):

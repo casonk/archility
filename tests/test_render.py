@@ -200,6 +200,52 @@ class RenderTests(unittest.TestCase):
                 [step.command for step in steps if step.tool == "pydeps"],
             )
 
+    def test_build_render_steps_for_shell_database_and_tooling_sidecars(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp) / "demo-repo"
+            (repo_root / "docs" / "diagrams").mkdir(parents=True)
+            (repo_root / "scripts").mkdir()
+            (repo_root / "scripts" / "common.sh").write_text("#!/usr/bin/env bash\necho common\n")
+            (repo_root / "scripts" / "deploy.sh").write_text(
+                "#!/usr/bin/env bash\nsource ./common.sh\ncurl https://example.com\n"
+            )
+            (repo_root / "db").mkdir()
+            (repo_root / "db" / "schema.sql").write_text(
+                "CREATE TABLE users (id INTEGER PRIMARY KEY);\n"
+                "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id));\n"
+            )
+            (repo_root / ".github" / "workflows").mkdir(parents=True)
+            (repo_root / ".github" / "workflows" / "ci.yml").write_text(
+                "jobs:\n  test:\n    steps:\n      - uses: actions/checkout@v4\n"
+                "      - run: pip install -r requirements.txt\n"
+            )
+
+            steps = build_render_steps(repo_root, archility_root=Path("/tool-home"))
+
+            self.assertEqual([step.tool for step in steps], [
+                "archility-shell",
+                "plantuml",
+                "plantuml",
+                "archility-database",
+                "plantuml",
+                "plantuml",
+                "archility-tooling",
+                "plantuml",
+                "plantuml",
+            ])
+            self.assertEqual(
+                steps[0].command,
+                ["archility", "archility-shell", str(repo_root / "docs" / "diagrams" / "shell-call-graph.puml")],
+            )
+            self.assertEqual(
+                steps[3].command,
+                ["archility", "archility-database", str(repo_root / "docs" / "diagrams" / "database-schema.puml")],
+            )
+            self.assertEqual(
+                steps[6].command,
+                ["archility", "archility-tooling", str(repo_root / "docs" / "diagrams" / "tooling-integrations.puml")],
+            )
+
     def test_format_render_plan_for_empty_repo(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = Path(tmp)
@@ -549,6 +595,53 @@ class RenderTests(unittest.TestCase):
             normalized = (repo_root / "docs" / "diagrams" / "python-packages.puml").read_text(encoding="utf-8")
             self.assertIn('rectangle "scripts.extract_education\\n1 python file" as scripts.extract_education', normalized)
             self.assertIn('rectangle "talkmap\\n1 python file" as talkmap', normalized)
+
+    def test_run_render_steps_generates_shell_database_and_tooling_sources(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp) / "demo"
+            (repo_root / "docs" / "diagrams").mkdir(parents=True)
+            (repo_root / "scripts").mkdir()
+            (repo_root / "scripts" / "common.sh").write_text("#!/usr/bin/env bash\necho common\n")
+            (repo_root / "scripts" / "deploy.sh").write_text(
+                "#!/usr/bin/env bash\nsource ./common.sh\ncurl https://example.com\n"
+            )
+            (repo_root / "db").mkdir()
+            (repo_root / "db" / "schema.sql").write_text(
+                "CREATE TABLE users (id INTEGER PRIMARY KEY);\n"
+                "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id));\n"
+            )
+            (repo_root / ".github" / "workflows").mkdir(parents=True)
+            (repo_root / ".github" / "workflows" / "ci.yml").write_text(
+                "jobs:\n  test:\n    steps:\n      - uses: actions/checkout@v4\n"
+                "      - run: pip install -r requirements.txt\n"
+            )
+            tool_root = repo_root / "tool-home" / "tools" / "bin"
+            tool_root.mkdir(parents=True)
+            (tool_root / "plantuml").write_text("#!/usr/bin/env bash\n")
+
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
+
+            def runner(command: list[str], cwd: str | None) -> None:
+                output = Path(command[-1].replace(".puml", ".svg")) if "-tsvg" in command else Path(command[-1].replace(".puml", ".png"))
+                output.write_text("<svg />\n" if output.suffix == ".svg" else "png\n")
+
+            run_render_steps(steps, runner=runner)
+
+            shell_source = (repo_root / "docs" / "diagrams" / "shell-call-graph.puml").read_text(encoding="utf-8")
+            database_source = (repo_root / "docs" / "diagrams" / "database-schema.puml").read_text(encoding="utf-8")
+            tooling_source = (repo_root / "docs" / "diagrams" / "tooling-integrations.puml").read_text(encoding="utf-8")
+
+            self.assertIn("scripts/deploy.sh", shell_source)
+            self.assertIn("curl", shell_source)
+            self.assertIn("source", shell_source)
+            self.assertIn("orders", database_source)
+            self.assertIn("users", database_source)
+            self.assertIn(": FK", database_source)
+            self.assertIn("actions/checkout", tooling_source)
+            self.assertIn("pip", tooling_source)
+            self.assertTrue((repo_root / "docs" / "diagrams" / "shell-call-graph.puml.svg").exists())
+            self.assertTrue((repo_root / "docs" / "diagrams" / "database-schema.puml.png").exists())
+            self.assertTrue((repo_root / "docs" / "diagrams" / "tooling-integrations.puml.svg").exists())
 
 
 if __name__ == "__main__":

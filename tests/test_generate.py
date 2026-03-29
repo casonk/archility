@@ -102,8 +102,36 @@ class GenerateTests(unittest.TestCase):
             self.assertIn("docs/diagrams/python-import-deps-src-python_demo.svg", blueprint)
             self.assertIn("docs/diagrams/python-classes.puml", blueprint)
             self.assertIn("docs/diagrams/python-packages.puml", blueprint)
-            self.assertIn("supplemental code-introspection diagrams", blueprint)
-            self.assertIn("Supplemental Python path", blueprint)
+            self.assertIn("supplemental deterministic introspection diagrams", blueprint)
+            self.assertIn("Supplemental introspection path", blueprint)
+
+    def test_generate_repo_documents_shell_database_and_tooling_diagrams(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            portfolio_root = Path(tmp) / "portfolio"
+            archility_root = portfolio_root / "util-repos" / "archility"
+            repo_root = portfolio_root / "ops-demo"
+            archility_root.mkdir(parents=True)
+            repo_root.mkdir()
+            (repo_root / "scripts").mkdir()
+            (repo_root / "scripts" / "deploy.sh").write_text("#!/usr/bin/env bash\ncurl https://example.com\n")
+            (repo_root / "db").mkdir()
+            (repo_root / "db" / "schema.sql").write_text("CREATE TABLE users (id INTEGER PRIMARY KEY);\n")
+            (repo_root / ".github" / "workflows").mkdir(parents=True)
+            (repo_root / ".github" / "workflows" / "ci.yml").write_text(
+                "jobs:\n  build:\n    steps:\n      - uses: actions/checkout@v4\n"
+            )
+
+            generate_repo(repo_root, archility_root=archility_root)
+
+            blueprint = (repo_root / "docs" / "contributor-architecture-blueprint.md").read_text()
+
+            self.assertIn("Supplemental shell diagrams after `archility render`", blueprint)
+            self.assertIn("docs/diagrams/shell-call-graph.puml", blueprint)
+            self.assertIn("Supplemental database diagrams after `archility render`", blueprint)
+            self.assertIn("docs/diagrams/database-schema.puml", blueprint)
+            self.assertIn("Supplemental tooling diagrams after `archility render`", blueprint)
+            self.assertIn("docs/diagrams/tooling-integrations.puml", blueprint)
+            self.assertIn("supplemental deterministic introspection diagrams", blueprint)
 
     def test_generate_repo_preserves_existing_files(self):
         with tempfile.TemporaryDirectory() as tmp:

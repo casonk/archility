@@ -9,7 +9,19 @@ import re
 from xml.sax.saxutils import escape
 
 from .audit import detect_source_roots
-from .render import PythonDiagramPlan, build_python_diagram_plan, build_render_steps, package_repo_root, run_render_steps
+from .render import (
+    DatabaseDiagramPlan,
+    PythonDiagramPlan,
+    ShellDiagramPlan,
+    ToolingDiagramPlan,
+    build_database_diagram_plan,
+    build_python_diagram_plan,
+    build_render_steps,
+    build_shell_diagram_plan,
+    build_tooling_diagram_plan,
+    package_repo_root,
+    run_render_steps,
+)
 
 EXCLUDED_TOP_LEVEL_DIRS = {
     ".git",
@@ -187,18 +199,26 @@ def build_blueprint_text(repo_root: Path, *, archility_root: Path | None = None)
     rel_repo = relative_repo_from_archility(repo_root, archility_root=archility_root)
     structure_lines = blueprint_structure_lines(repo_root)
     python_plan = build_python_diagram_plan(repo_root)
+    shell_plan = build_shell_diagram_plan(repo_root)
+    database_plan = build_database_diagram_plan(repo_root)
+    tooling_plan = build_tooling_diagram_plan(repo_root)
     workflow_line = (
         "- `.github/workflows/` is the standard automation directory for repo validation."
         if (repo_root / ".github" / "workflows").exists()
         else "- No `.github/workflows/` directory is present yet."
     )
-    python_asset_lines = _python_blueprint_asset_lines(python_plan)
+    supplemental_asset_lines = _supplemental_blueprint_asset_lines(
+        python_plan=python_plan,
+        shell_plan=shell_plan,
+        database_plan=database_plan,
+        tooling_plan=tooling_plan,
+    )
     contributor_notes = [
         "- Treat this file and the paired `docs/diagrams/` sources as the default architecture handoff surface.",
     ]
-    if python_plan is not None:
+    if any(plan is not None for plan in (python_plan, shell_plan, database_plan, tooling_plan)):
         contributor_notes.append(
-            "- Treat the `pydeps` and `pyreverse` outputs as supplemental code-introspection diagrams. "
+            "- Treat the supplemental deterministic introspection diagrams as additive sidecars. "
             "They do not replace the repo-authored architecture blueprint or the paired repo-architecture sources."
         )
     return "\n".join(
@@ -217,13 +237,13 @@ def build_blueprint_text(repo_root: Path, *, archility_root: Path | None = None)
             "  - `docs/diagrams/repo-architecture.puml.png`",
             "  - `docs/diagrams/repo-architecture.drawio.svg`",
             "  - `docs/diagrams/repo-architecture.drawio.png`",
-            *python_asset_lines,
+            *supplemental_asset_lines,
             f"- Shared toolchain owner: `{rel_archility}` from this repo",
             "",
             "## Architecture Authoring Paths",
             "",
             "- Programmatic path: `archility generate` builds this starter strictly from repository code and folder markers. This path is deterministic.",
-            "- Supplemental Python path: for repositories with detectable Python packages or modules, `archility render` also derives `pydeps` and `pyreverse` diagrams as deterministic sidecar assets.",
+            "- Supplemental introspection path: `archility render` can also derive deterministic sidecar diagrams for detected Python packages/modules, shell scripts, SQL/schema files, and tooling entrypoints.",
             "- Agentic path: an AI agent should inspect the full repository, understand the real execution and dependency boundaries, then rewrite or extend this starter into a repo-specific architecture. This path is intentionally non-deterministic.",
             "- Keep the standard filenames and folder layout even when the agentic path replaces the starter content with a more unique architecture.",
             "",
@@ -250,19 +270,49 @@ def build_blueprint_text(repo_root: Path, *, archility_root: Path | None = None)
     )
 
 
-def _python_blueprint_asset_lines(python_plan: PythonDiagramPlan | None) -> list[str]:
-    if python_plan is None:
-        return []
-
-    lines = [
-        "- Supplemental Python diagrams after `archility render`:",
-    ]
-    for output in python_plan.pydeps_outputs:
-        lines.append(f"  - `docs/diagrams/{output.name}` via `pydeps`")
-    for source in python_plan.pyreverse_sources:
-        lines.append(f"  - `docs/diagrams/{source.name}` via `pyreverse`")
-        lines.append(f"  - `docs/diagrams/{source.name}.svg`")
-        lines.append(f"  - `docs/diagrams/{source.name}.png`")
+def _supplemental_blueprint_asset_lines(
+    *,
+    python_plan: PythonDiagramPlan | None,
+    shell_plan: ShellDiagramPlan | None,
+    database_plan: DatabaseDiagramPlan | None,
+    tooling_plan: ToolingDiagramPlan | None,
+) -> list[str]:
+    lines: list[str] = []
+    if python_plan is not None:
+        lines.append("- Supplemental Python diagrams after `archility render`:")
+        for output in python_plan.pydeps_outputs:
+            lines.append(f"  - `docs/diagrams/{output.name}` via `pydeps`")
+        for source in python_plan.pyreverse_sources:
+            lines.append(f"  - `docs/diagrams/{source.name}` via `pyreverse`")
+            lines.append(f"  - `docs/diagrams/{source.name}.svg`")
+            lines.append(f"  - `docs/diagrams/{source.name}.png`")
+    if shell_plan is not None:
+        lines.extend(
+            [
+                "- Supplemental shell diagrams after `archility render`:",
+                f"  - `docs/diagrams/{shell_plan.source.name}` via `archility`",
+                f"  - `docs/diagrams/{shell_plan.source.name}.svg`",
+                f"  - `docs/diagrams/{shell_plan.source.name}.png`",
+            ]
+        )
+    if database_plan is not None:
+        lines.extend(
+            [
+                "- Supplemental database diagrams after `archility render`:",
+                f"  - `docs/diagrams/{database_plan.source.name}` via `archility`",
+                f"  - `docs/diagrams/{database_plan.source.name}.svg`",
+                f"  - `docs/diagrams/{database_plan.source.name}.png`",
+            ]
+        )
+    if tooling_plan is not None:
+        lines.extend(
+            [
+                "- Supplemental tooling diagrams after `archility render`:",
+                f"  - `docs/diagrams/{tooling_plan.source.name}` via `archility`",
+                f"  - `docs/diagrams/{tooling_plan.source.name}.svg`",
+                f"  - `docs/diagrams/{tooling_plan.source.name}.png`",
+            ]
+        )
     return lines
 
 
