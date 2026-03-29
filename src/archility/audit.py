@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import os
 from pathlib import Path
+import re
 
 CODE_MARKER_FILES = (
     "pyproject.toml",
@@ -16,9 +18,8 @@ CODE_MARKER_FILES = (
 CODE_MARKER_DIRS = ("src", "tests", "test", "scripts", "services", "app")
 PYTHON_MARKER_FILES = ("pyproject.toml", "setup.py", "setup.cfg")
 PYTHON_SOURCE_ROOT_DIRS = ("src", "app", "services", "scripts")
-PYTHON_EXCLUDED_DIRS = {
+COMMON_EXCLUDED_DIRS = {
     ".git",
-    ".github",
     ".venv",
     "__pycache__",
     "build",
@@ -28,7 +29,25 @@ PYTHON_EXCLUDED_DIRS = {
     "tools",
     "venv",
 }
+PYTHON_EXCLUDED_DIRS = COMMON_EXCLUDED_DIRS | {".github"}
 PYTHON_EXCLUDED_TARGET_NAMES = {"test", "tests"}
+SHELL_SOURCE_SUFFIXES = {".sh", ".bash", ".zsh", ".ksh"}
+SQL_SOURCE_SUFFIXES = {".sql"}
+WORKFLOW_SOURCE_SUFFIXES = {".yml", ".yaml"}
+SHELL_SHEBANG_PATTERN = re.compile(r"^#!.*\b(?:ba|z|k)?sh(?:\s|$)")
+TOOLING_ENTRYPOINT_FILENAMES = {
+    "Dockerfile",
+    "Containerfile",
+    "Makefile",
+    "Justfile",
+    "Taskfile.yml",
+    "Taskfile.yaml",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    "compose.yml",
+    "compose.yaml",
+}
+TOOLING_ENTRYPOINT_PREFIXES = ("Dockerfile.", "Containerfile.", "Makefile.")
 SOURCE_DIAGRAM_SUFFIXES = {
     ".drawio",
     ".puml",
@@ -92,6 +111,22 @@ def detect_source_roots(root: Path) -> list[str]:
     return [name for name in CODE_MARKER_DIRS if (root / name).exists()]
 
 
+def _iter_repo_files(root: Path, *, excluded_dirs: set[str]) -> list[Path]:
+    files: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        current_dir = Path(dirpath)
+        dirnames[:] = sorted(
+            dir_name
+            for dir_name in dirnames
+            if dir_name not in excluded_dirs and not (dir_name.startswith(".") and dir_name != ".github")
+        )
+        for filename in sorted(filenames):
+            if filename.startswith(".") and filename != ".env":
+                continue
+            files.append(current_dir / filename)
+    return files
+
+
 def _should_skip_python_scan(path: Path) -> bool:
     return path.name.startswith(".") or path.name in PYTHON_EXCLUDED_DIRS
 
@@ -151,6 +186,64 @@ def collect_python_diagram_targets(root: Path) -> list[Path]:
             resolved = target.resolve()
             if resolved in seen:
                 continue
+            seen.add(resolved)
+            targets.append(resolved)
+    return targets
+
+
+def _is_shell_script(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    if path.suffix.lower() in SHELL_SOURCE_SUFFIXES:
+        return True
+    try:
+        first_line = path.read_text(encoding="utf-8", errors="ignore").splitlines()[:1]
+    except OSError:
+        return False
+    if not first_line:
+        return False
+    return SHELL_SHEBANG_PATTERN.match(first_line[0]) is not None
+
+
+def collect_shell_diagram_targets(root: Path) -> list[Path]:
+    return [
+        path
+        for path in _iter_repo_files(root, excluded_dirs=COMMON_EXCLUDED_DIRS)
+        if _is_shell_script(path)
+    ]
+
+
+def collect_sql_diagram_targets(root: Path) -> list[Path]:
+    return [
+        path
+        for path in _iter_repo_files(root, excluded_dirs=COMMON_EXCLUDED_DIRS)
+        if path.suffix.lower() in SQL_SOURCE_SUFFIXES
+    ]
+
+
+def collect_tooling_diagram_targets(root: Path) -> list[Path]:
+    targets: list[Path] = []
+    seen: set[Path] = set()
+    workflow_dir = root / ".github" / "workflows"
+    if workflow_dir.exists():
+        for path in sorted(workflow_dir.iterdir(), key=lambda entry: entry.name):
+            if path.is_file() and path.suffix.lower() in WORKFLOW_SOURCE_SUFFIXES:
+                resolved = path.resolve()
+                seen.add(resolved)
+                targets.append(resolved)
+
+    for path in collect_shell_diagram_targets(root):
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        targets.append(resolved)
+
+    for path in _iter_repo_files(root, excluded_dirs=COMMON_EXCLUDED_DIRS):
+        if path.resolve() in seen:
+            continue
+        if path.name in TOOLING_ENTRYPOINT_FILENAMES or path.name.startswith(TOOLING_ENTRYPOINT_PREFIXES):
+            resolved = path.resolve()
             seen.add(resolved)
             targets.append(resolved)
     return targets

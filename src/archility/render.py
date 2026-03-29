@@ -7,22 +7,117 @@ from dataclasses import dataclass
 import io
 from pathlib import Path
 import re
+import shlex
 import subprocess
 from typing import Callable
 from xml.etree import ElementTree
 
-from .audit import collect_python_diagram_targets
+from .audit import (
+    collect_python_diagram_targets,
+    collect_shell_diagram_targets,
+    collect_sql_diagram_targets,
+    collect_tooling_diagram_targets,
+)
 
 PLANTUML_SUFFIXES = (".puml", ".plantuml")
 DRAWIO_SUFFIXES = (".drawio",)
 MANAGED_PYREVERSE_FILENAMES = {"python-classes.puml", "python-packages.puml"}
+MANAGED_SUPPLEMENTAL_FILENAMES = {
+    "database-schema.puml",
+    "shell-call-graph.puml",
+    "tooling-integrations.puml",
+}
 PYDEPS_PREFIX = "python-import-deps-"
+SHELL_GRAPH_FILENAME = "shell-call-graph.puml"
+DATABASE_GRAPH_FILENAME = "database-schema.puml"
+TOOLING_GRAPH_FILENAME = "tooling-integrations.puml"
 DRAWIO_EDGE_STYLE_DEFAULTS = (
     ("jumpStyle", "arc"),
     ("jumpSize", "10"),
 )
 LOW_SIGNAL_PYREVERSE_CLASS_THRESHOLD = 1
 RunCommand = Callable[[list[str], str | None], None]
+RenderAction = Callable[[], None]
+SHELL_INTERPRETERS = {"bash", "sh", "zsh", "ksh"}
+SHELL_CONTROL_KEYWORDS = {
+    "{",
+    "}",
+    "if",
+    "then",
+    "elif",
+    "else",
+    "fi",
+    "for",
+    "while",
+    "until",
+    "do",
+    "done",
+    "case",
+    "esac",
+    "function",
+    "select",
+    "in",
+}
+SHELL_BUILTINS = {
+    ".",
+    ":",
+    "[",
+    "[[",
+    "alias",
+    "bg",
+    "break",
+    "cd",
+    "continue",
+    "dirs",
+    "echo",
+    "eval",
+    "exec",
+    "exit",
+    "export",
+    "false",
+    "fg",
+    "getopts",
+    "hash",
+    "jobs",
+    "kill",
+    "local",
+    "popd",
+    "printf",
+    "pushd",
+    "pwd",
+    "read",
+    "readonly",
+    "return",
+    "set",
+    "shift",
+    "source",
+    "test",
+    "times",
+    "trap",
+    "true",
+    "type",
+    "typeset",
+    "ulimit",
+    "umask",
+    "unalias",
+    "unset",
+    "wait",
+}
+COMMAND_WRAPPERS = {"builtin", "command", "env", "nohup", "sudo", "time"}
+TOOL_WRAPPER_DIR_PARTS = ("tools", "bin")
+ENV_ASSIGNMENT_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+CREATE_TABLE_PATTERN = re.compile(
+    r"\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?([A-Za-z0-9_.`\"[\]-]+)",
+    re.IGNORECASE,
+)
+ALTER_TABLE_PATTERN = re.compile(
+    r"\balter\s+table\s+(?:only\s+)?([A-Za-z0-9_.`\"[\]-]+)",
+    re.IGNORECASE,
+)
+REFERENCES_PATTERN = re.compile(
+    r"\breferences\s+([A-Za-z0-9_.`\"[\]-]+)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(slots=True)
@@ -33,6 +128,7 @@ class RenderStep:
     produced_outputs: tuple[str, ...]
     command: list[str]
     cwd: str | None = None
+    internal_action: RenderAction | None = None
 
     @property
     def output(self) -> str:
@@ -41,6 +137,10 @@ class RenderStep:
     @property
     def produced_output(self) -> str:
         return self.produced_outputs[0]
+
+    @property
+    def is_internal(self) -> bool:
+        return self.internal_action is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +219,27 @@ class PythonModuleInfo:
     function_count: int
 
 
+@dataclass(slots=True)
+class ShellDiagramPlan:
+    repo_root: Path
+    targets: tuple[Path, ...]
+    source: Path
+
+
+@dataclass(slots=True)
+class DatabaseDiagramPlan:
+    repo_root: Path
+    targets: tuple[Path, ...]
+    source: Path
+
+
+@dataclass(slots=True)
+class ToolingDiagramPlan:
+    repo_root: Path
+    targets: tuple[Path, ...]
+    source: Path
+
+
 def package_repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -149,12 +270,48 @@ def build_python_diagram_plan(repo_path: str | Path) -> PythonDiagramPlan | None
     )
 
 
+def build_shell_diagram_plan(repo_path: str | Path) -> ShellDiagramPlan | None:
+    repo_root = Path(repo_path).resolve()
+    targets = tuple(collect_shell_diagram_targets(repo_root))
+    if not targets:
+        return None
+    return ShellDiagramPlan(
+        repo_root=repo_root,
+        targets=targets,
+        source=diagram_root(repo_root) / SHELL_GRAPH_FILENAME,
+    )
+
+
+def build_database_diagram_plan(repo_path: str | Path) -> DatabaseDiagramPlan | None:
+    repo_root = Path(repo_path).resolve()
+    targets = tuple(collect_sql_diagram_targets(repo_root))
+    if not targets:
+        return None
+    return DatabaseDiagramPlan(
+        repo_root=repo_root,
+        targets=targets,
+        source=diagram_root(repo_root) / DATABASE_GRAPH_FILENAME,
+    )
+
+
+def build_tooling_diagram_plan(repo_path: str | Path) -> ToolingDiagramPlan | None:
+    repo_root = Path(repo_path).resolve()
+    targets = tuple(collect_tooling_diagram_targets(repo_root))
+    if not targets:
+        return None
+    return ToolingDiagramPlan(
+        repo_root=repo_root,
+        targets=targets,
+        source=diagram_root(repo_root) / TOOLING_GRAPH_FILENAME,
+    )
+
+
 def find_plantuml_sources(repo_path: str | Path) -> list[Path]:
     repo_root = Path(repo_path).resolve()
     root = diagram_root(repo_path)
     if not root.exists():
         return []
-    ignored_filenames = _managed_pyreverse_filenames(repo_root)
+    ignored_filenames = _managed_generated_plantuml_filenames(repo_root)
     return sorted(
         (
             path
@@ -204,6 +361,15 @@ def build_render_steps(repo_path: str | Path, *, archility_root: Path | None = N
             ):
                 steps.extend(_build_plantuml_render_steps(source, plantuml_bin, produced_stem=produced_stem))
         steps.extend(_build_pydeps_steps(python_plan, pydeps_bin))
+    shell_plan = build_shell_diagram_plan(repo_root)
+    if shell_plan is not None:
+        steps.extend(_build_shell_diagram_steps(shell_plan, plantuml_bin))
+    database_plan = build_database_diagram_plan(repo_root)
+    if database_plan is not None:
+        steps.extend(_build_database_diagram_steps(database_plan, plantuml_bin))
+    tooling_plan = build_tooling_diagram_plan(repo_root)
+    if tooling_plan is not None:
+        steps.extend(_build_tooling_diagram_steps(tooling_plan, plantuml_bin))
 
     return steps
 
@@ -212,6 +378,8 @@ def ensure_tools_available(steps: list[RenderStep]) -> None:
     missing: list[str] = []
     seen: set[str] = set()
     for step in steps:
+        if step.is_internal:
+            continue
         tool_path = Path(step.command[0])
         if step.command[0] in seen:
             continue
@@ -230,7 +398,10 @@ def run_render_steps(steps: list[RenderStep], *, runner: RunCommand | None = Non
     ensure_tools_available(steps)
     execute = runner or _default_runner
     for step in steps:
-        execute(step.command, step.cwd)
+        if step.internal_action is not None:
+            step.internal_action()
+        else:
+            execute(step.command, step.cwd)
         for produced_output, target_output in zip(step.produced_outputs, step.outputs, strict=True):
             _ensure_step_output(step.source, Path(produced_output), Path(target_output))
         if step.tool == "pyreverse":
@@ -368,6 +539,65 @@ def _build_pyreverse_step(plan: PythonDiagramPlan, pyreverse_bin: str) -> Render
     )
 
 
+def _build_shell_diagram_steps(plan: ShellDiagramPlan, plantuml_bin: str) -> list[RenderStep]:
+    relative_targets = ", ".join(str(path.relative_to(plan.repo_root)) for path in plan.targets)
+    return _build_generated_plantuml_steps(
+        tool="archility-shell",
+        source=plan.source,
+        description=relative_targets,
+        plantuml_bin=plantuml_bin,
+        generator=lambda: _build_shell_graph_text(plan),
+    )
+
+
+def _build_database_diagram_steps(plan: DatabaseDiagramPlan, plantuml_bin: str) -> list[RenderStep]:
+    relative_targets = ", ".join(str(path.relative_to(plan.repo_root)) for path in plan.targets)
+    return _build_generated_plantuml_steps(
+        tool="archility-database",
+        source=plan.source,
+        description=relative_targets,
+        plantuml_bin=plantuml_bin,
+        generator=lambda: _build_database_graph_text(plan),
+    )
+
+
+def _build_tooling_diagram_steps(plan: ToolingDiagramPlan, plantuml_bin: str) -> list[RenderStep]:
+    relative_targets = ", ".join(str(path.relative_to(plan.repo_root)) for path in plan.targets)
+    return _build_generated_plantuml_steps(
+        tool="archility-tooling",
+        source=plan.source,
+        description=relative_targets,
+        plantuml_bin=plantuml_bin,
+        generator=lambda: _build_tooling_graph_text(plan),
+    )
+
+
+def _build_generated_plantuml_steps(
+    *,
+    tool: str,
+    source: Path,
+    description: str,
+    plantuml_bin: str,
+    generator: Callable[[], str],
+) -> list[RenderStep]:
+    def write_source() -> None:
+        source.parent.mkdir(parents=True, exist_ok=True)
+        text = generator()
+        source.write_text(text if text.endswith("\n") else text + "\n", encoding="utf-8")
+
+    return [
+        RenderStep(
+            tool=tool,
+            source=description,
+            outputs=(str(source),),
+            produced_outputs=(str(source),),
+            command=["archility", tool, str(source)],
+            internal_action=write_source,
+        ),
+        *_build_plantuml_render_steps(source, plantuml_bin),
+    ]
+
+
 def _single_output_step(
     *,
     tool: str,
@@ -418,9 +648,10 @@ def _safe_project_name(name: str) -> str:
     return safe or "repository"
 
 
-def _managed_pyreverse_filenames(repo_root: Path) -> set[str]:
+def _managed_generated_plantuml_filenames(repo_root: Path) -> set[str]:
     project_name = _safe_project_name(repo_root.name)
     return {
+        *MANAGED_SUPPLEMENTAL_FILENAMES,
         *MANAGED_PYREVERSE_FILENAMES,
         f"classes_{project_name}.puml",
         f"packages_{project_name}.puml",
@@ -635,6 +866,563 @@ def _unique_python_module_info(module_info: dict[str, PythonModuleInfo]) -> list
     for info in module_info.values():
         unique_by_path.setdefault(info.path, info)
     return list(unique_by_path.values())
+
+
+def _build_shell_graph_text(plan: ShellDiagramPlan) -> str:
+    shell_targets = {path.resolve() for path in plan.targets}
+    script_aliases: dict[Path, str] = {}
+    tool_aliases: dict[str, str] = {}
+    alias_counts: dict[str, int] = {}
+    local_edges: set[tuple[str, str, str]] = set()
+    tool_edges: set[tuple[str, str]] = set()
+    script_summaries: list[tuple[Path, str, int, int]] = []
+    all_tools: set[str] = set()
+
+    for path in plan.targets:
+        relative = _relative_repo_path(plan.repo_root, path)
+        script_aliases[path] = _unique_alias("shell", relative, alias_counts)
+
+    for path in plan.targets:
+        local_calls, tools = _analyze_shell_script(plan.repo_root, path, shell_targets)
+        relative = _relative_repo_path(plan.repo_root, path)
+        script_summaries.append((path, relative, len(local_calls), len(tools)))
+        all_tools.update(tools)
+        for target, relation in local_calls:
+            if target not in script_aliases:
+                continue
+            local_edges.add((script_aliases[path], script_aliases[target], relation))
+        for tool_name in tools:
+            tool_edges.add((script_aliases[path], tool_name))
+
+    lines = [
+        "@startuml",
+        f"title {plan.repo_root.name} Shell Script Flow",
+        "left to right direction",
+        "skinparam shadowing false",
+        "skinparam defaultFontName Monospace",
+        "skinparam componentStyle rectangle",
+        "skinparam linetype ortho",
+    ]
+    for path, relative, local_count, tool_count in sorted(script_summaries, key=lambda item: item[1]):
+        label_lines = [
+            relative,
+            f"{local_count} local shell edge{'s' if local_count != 1 else ''}",
+            f"{tool_count} external tool{'s' if tool_count != 1 else ''}",
+        ]
+        lines.append(
+            f'rectangle "{_escape_plantuml_label("\\n".join(label_lines))}" as {script_aliases[path]} #DBEAFE'
+        )
+    for tool_name in sorted(all_tools):
+        tool_aliases[tool_name] = _unique_alias("tool", tool_name, alias_counts)
+        lines.append(
+            f'cloud "{_escape_plantuml_label(tool_name)}" as {tool_aliases[tool_name]} #FEF3C7'
+        )
+    for source_alias, target_alias, relation in sorted(local_edges):
+        lines.append(f"{source_alias} --> {target_alias} : {relation}")
+    for source_alias, tool_name in sorted(tool_edges):
+        lines.append(f"{source_alias} --> {tool_aliases[tool_name]}")
+    lines.extend(
+        [
+            "note as shellGraphSummary",
+            f"Scanned {len(plan.targets)} shell script{'s' if len(plan.targets) != 1 else ''}.",
+            f"Detected {len(local_edges)} local shell edge{'s' if len(local_edges) != 1 else ''}.",
+            f"Detected {len(all_tools)} external tool{'s' if len(all_tools) != 1 else ''}.",
+            "end note",
+            "@enduml",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _build_database_graph_text(plan: DatabaseDiagramPlan) -> str:
+    tables: dict[str, set[str]] = {}
+    relations: set[tuple[str, str]] = set()
+    alias_counts: dict[str, int] = {}
+    for path in plan.targets:
+        relative = _relative_repo_path(plan.repo_root, path)
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        for statement in re.split(r";\s*", text):
+            statement = statement.strip()
+            if not statement:
+                continue
+            source_table = None
+            create_match = CREATE_TABLE_PATTERN.search(statement)
+            if create_match is not None:
+                source_table = _normalize_sql_identifier(create_match.group(1))
+            else:
+                alter_match = ALTER_TABLE_PATTERN.search(statement)
+                if alter_match is not None:
+                    source_table = _normalize_sql_identifier(alter_match.group(1))
+            if source_table is None:
+                continue
+            tables.setdefault(source_table, set()).add(relative)
+            for reference in REFERENCES_PATTERN.findall(statement):
+                target_table = _normalize_sql_identifier(reference)
+                if not target_table:
+                    continue
+                tables.setdefault(target_table, set())
+                relations.add((source_table, target_table))
+
+    lines = [
+        "@startuml",
+        f"title {plan.repo_root.name} Database Schema Overview",
+        "left to right direction",
+        "skinparam shadowing false",
+        "skinparam defaultFontName Monospace",
+        "skinparam linetype ortho",
+    ]
+    if not tables:
+        lines.extend(
+            [
+                "note as databaseSchemaSummary",
+                f"Scanned {len(plan.targets)} SQL file{'s' if len(plan.targets) != 1 else ''}.",
+                "No CREATE TABLE or REFERENCES patterns were detected.",
+                "Files: " + ", ".join(_relative_repo_path(plan.repo_root, path) for path in plan.targets[:5]),
+                "end note",
+                "@enduml",
+            ]
+        )
+        return "\n".join(lines)
+
+    table_aliases = {
+        table_name: _unique_alias("table", table_name, alias_counts)
+        for table_name in sorted(tables)
+    }
+    for table_name in sorted(tables):
+        lines.append(
+            f'entity "{_escape_plantuml_label(_sql_table_summary_label(table_name, tables[table_name]))}" as {table_aliases[table_name]} #DCFCE7'
+        )
+    for source_table, target_table in sorted(relations):
+        if source_table not in table_aliases or target_table not in table_aliases:
+            continue
+        lines.append(f"{table_aliases[source_table]} --> {table_aliases[target_table]} : FK")
+    lines.extend(
+        [
+            "note as databaseSchemaSummary",
+            f"Scanned {len(plan.targets)} SQL file{'s' if len(plan.targets) != 1 else ''}.",
+            f"Detected {len(tables)} table{'s' if len(tables) != 1 else ''}.",
+            f"Detected {len(relations)} foreign-key edge{'s' if len(relations) != 1 else ''}.",
+            "end note",
+            "@enduml",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _build_tooling_graph_text(plan: ToolingDiagramPlan) -> str:
+    alias_counts: dict[str, int] = {}
+    source_aliases: dict[Path, str] = {}
+    source_tool_map: dict[Path, tuple[str, ...]] = {}
+    all_tools: set[str] = set()
+
+    for path in plan.targets:
+        relative = _relative_repo_path(plan.repo_root, path)
+        source_aliases[path] = _unique_alias("source", relative, alias_counts)
+        tools = tuple(sorted(_extract_tools_from_tooling_source(plan.repo_root, path)))
+        source_tool_map[path] = tools
+        all_tools.update(tools)
+
+    tool_aliases = {
+        tool_name: _unique_alias("tool", tool_name, alias_counts)
+        for tool_name in sorted(all_tools)
+    }
+    lines = [
+        "@startuml",
+        f"title {plan.repo_root.name} Tooling Integrations",
+        "left to right direction",
+        "skinparam shadowing false",
+        "skinparam defaultFontName Monospace",
+        "skinparam componentStyle rectangle",
+        "skinparam linetype ortho",
+    ]
+    for path in sorted(plan.targets, key=lambda entry: _relative_repo_path(plan.repo_root, entry)):
+        relative = _relative_repo_path(plan.repo_root, path)
+        tools = source_tool_map[path]
+        label_lines = [
+            relative,
+            f"{len(tools)} detected tool{'s' if len(tools) != 1 else ''}",
+        ]
+        lines.append(
+            f'rectangle "{_escape_plantuml_label("\\n".join(label_lines))}" as {source_aliases[path]} #E0F2FE'
+        )
+    for tool_name in sorted(all_tools):
+        lines.append(f'cloud "{_escape_plantuml_label(tool_name)}" as {tool_aliases[tool_name]} #FEF3C7')
+    for path in sorted(plan.targets, key=lambda entry: _relative_repo_path(plan.repo_root, entry)):
+        for tool_name in source_tool_map[path]:
+            lines.append(f"{source_aliases[path]} --> {tool_aliases[tool_name]}")
+    lines.extend(
+        [
+            "note as toolingGraphSummary",
+            f"Scanned {len(plan.targets)} tooling entrypoint{'s' if len(plan.targets) != 1 else ''}.",
+            f"Detected {len(all_tools)} third-party tool{'s' if len(all_tools) != 1 else ''}.",
+            "end note",
+            "@enduml",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _analyze_shell_script(
+    repo_root: Path,
+    path: Path,
+    shell_targets: set[Path],
+) -> tuple[set[tuple[Path, str]], set[str]]:
+    local_calls: set[tuple[Path, str]] = set()
+    tools: set[str] = set()
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    function_names = _collect_shell_function_names(text)
+    for tokens in _iter_command_token_lists(text):
+        command_tokens = _strip_command_wrappers(tokens)
+        if not command_tokens:
+            continue
+        head = command_tokens[0]
+        if Path(head).name in function_names:
+            continue
+        if head in {".", "source"}:
+            local_target = _resolve_local_shell_target(path, command_tokens[1] if len(command_tokens) > 1 else None, shell_targets)
+            if local_target is not None:
+                local_calls.add((local_target, "source"))
+            continue
+        if Path(head).name in SHELL_INTERPRETERS and len(command_tokens) > 1:
+            local_target = _resolve_local_shell_target(path, command_tokens[1], shell_targets)
+            if local_target is not None:
+                local_calls.add((local_target, "exec"))
+                continue
+        local_target = _resolve_local_shell_target(path, head, shell_targets)
+        if local_target is not None:
+            local_calls.add((local_target, "call"))
+            continue
+        tool_name = _normalize_tool_command(command_tokens, repo_root=repo_root, current_path=path)
+        if tool_name is not None and tool_name not in SHELL_INTERPRETERS:
+            tools.add(tool_name)
+    return (local_calls, tools)
+
+
+def _extract_tools_from_tooling_source(repo_root: Path, path: Path) -> set[str]:
+    relative = _relative_repo_path(repo_root, path)
+    if relative.startswith(".github/workflows/"):
+        return _extract_tools_from_workflow(path, repo_root)
+    if path.suffix.lower() in {".sh", ".bash", ".zsh", ".ksh"} or path.name == "setup.sh":
+        return _extract_tools_from_shell_script(path, repo_root)
+    if path.name.startswith(("Dockerfile", "Containerfile")):
+        tools = _extract_tools_from_dockerfile(path, repo_root)
+        tools.add("docker")
+        return tools
+    if path.name in {"compose.yml", "compose.yaml", "docker-compose.yml", "docker-compose.yaml"}:
+        return {"docker compose"}
+    if path.name in {"Makefile", "Justfile"} or path.name.startswith("Makefile."):
+        return _extract_tools_from_makefile(path, repo_root)
+    if path.name.startswith("Taskfile"):
+        return _extract_tools_from_taskfile(path, repo_root)
+    return _extract_tools_from_command_text(path.read_text(encoding="utf-8", errors="ignore"), repo_root, path)
+
+
+def _extract_tools_from_shell_script(path: Path, repo_root: Path) -> set[str]:
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    function_names = _collect_shell_function_names(text)
+    tools: set[str] = set()
+    for tokens in _iter_command_token_lists(text):
+        command_tokens = _strip_command_wrappers(tokens)
+        if not command_tokens:
+            continue
+        if Path(command_tokens[0]).name in function_names:
+            continue
+        tool_name = _normalize_tool_command(command_tokens, repo_root=repo_root, current_path=path)
+        if tool_name is not None:
+            tools.add(tool_name)
+    return tools
+
+
+def _extract_tools_from_workflow(path: Path, repo_root: Path) -> set[str]:
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    tools = {
+        (match.group(1) or match.group(2)).strip().split("@", 1)[0]
+        for match in re.finditer(
+            r"^\s*-\s*uses:\s*([^\s#]+)|^\s*uses:\s*([^\s#]+)",
+            text,
+            flags=re.MULTILINE,
+        )
+    }
+    for block in _extract_workflow_run_blocks(text):
+        tools.update(_extract_tools_from_command_text(block, repo_root, path))
+    return {tool for tool in tools if tool}
+
+
+def _extract_workflow_run_blocks(text: str) -> list[str]:
+    blocks: list[str] = []
+    lines = text.splitlines()
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        match = re.match(r"^(\s*)(?:-\s*)?run:\s*(.*)$", line)
+        if match is None:
+            index += 1
+            continue
+        indent = len(match.group(1))
+        payload = match.group(2).strip()
+        if payload and payload not in {"|", "|-", ">", ">-"}:
+            blocks.append(payload)
+            index += 1
+            continue
+        index += 1
+        block_lines: list[str] = []
+        while index < len(lines):
+            candidate = lines[index]
+            if not candidate.strip():
+                block_lines.append("")
+                index += 1
+                continue
+            candidate_indent = len(candidate) - len(candidate.lstrip(" "))
+            if candidate_indent <= indent:
+                break
+            block_lines.append(candidate[indent + 2 :] if candidate_indent >= indent + 2 else candidate.lstrip())
+            index += 1
+        blocks.append("\n".join(block_lines))
+    return blocks
+
+
+def _extract_tools_from_dockerfile(path: Path, repo_root: Path) -> set[str]:
+    tools: set[str] = set()
+    lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    current_run: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if current_run:
+            current_run.append(stripped.removesuffix("\\").strip())
+            if not stripped.endswith("\\"):
+                tools.update(_extract_tools_from_command_text(" ".join(current_run), repo_root, path))
+                current_run = []
+            continue
+        if not stripped.upper().startswith("RUN "):
+            continue
+        payload = stripped[4:].strip()
+        current_run.append(payload.removesuffix("\\").strip())
+        if not stripped.endswith("\\"):
+            tools.update(_extract_tools_from_command_text(" ".join(current_run), repo_root, path))
+            current_run = []
+    return tools
+
+
+def _extract_tools_from_makefile(path: Path, repo_root: Path) -> set[str]:
+    command_lines = [
+        line.lstrip()
+        for line in path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        if line.startswith("\t")
+    ]
+    return _extract_tools_from_command_text("\n".join(command_lines), repo_root, path)
+
+
+def _extract_tools_from_taskfile(path: Path, repo_root: Path) -> set[str]:
+    lines: list[str] = []
+    for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        command_match = re.match(r"^\s*(?:cmd|command):\s*(.+)$", line)
+        if command_match is not None:
+            lines.append(command_match.group(1))
+            continue
+        list_match = re.match(r"^\s*-\s+(.+)$", line)
+        if list_match is not None:
+            lines.append(list_match.group(1))
+    return _extract_tools_from_command_text("\n".join(lines), repo_root, path)
+
+
+def _extract_tools_from_command_text(text: str, repo_root: Path, current_path: Path) -> set[str]:
+    tools: set[str] = set()
+    for tokens in _iter_command_token_lists(text):
+        command_tokens = _strip_command_wrappers(tokens)
+        tool_name = _normalize_tool_command(command_tokens, repo_root=repo_root, current_path=current_path)
+        if tool_name is not None:
+            tools.add(tool_name)
+    return tools
+
+
+def _iter_command_token_lists(text: str) -> list[list[str]]:
+    token_lists: list[list[str]] = []
+    heredoc_end: str | None = None
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if heredoc_end is not None:
+            if line == heredoc_end:
+                heredoc_end = None
+            continue
+        if not line or line.startswith("#"):
+            continue
+        if _looks_like_shell_function_definition(line) or _looks_like_shell_case_label(line):
+            continue
+        heredoc_match = re.search(r"<<-?\s*['\"]?([A-Za-z0-9_]+)['\"]?", raw_line)
+        for segment in re.split(r"\s*(?:&&|\|\||[|;])\s*", line):
+            segment = segment.strip()
+            if not segment:
+                continue
+            try:
+                tokens = shlex.split(segment, comments=True, posix=True)
+            except ValueError:
+                continue
+            if tokens:
+                token_lists.append(tokens)
+        if heredoc_match is not None:
+            heredoc_end = heredoc_match.group(1)
+    return token_lists
+
+
+def _collect_shell_function_names(text: str) -> set[str]:
+    function_names: set[str] = set()
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        match = re.match(r"^(?:function\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{?$", line)
+        if match is not None:
+            function_names.add(match.group(1))
+            continue
+        match = re.match(r"^function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{?$", line)
+        if match is not None:
+            function_names.add(match.group(1))
+    return function_names
+
+
+def _looks_like_shell_function_definition(line: str) -> bool:
+    return (
+        re.match(r"^(?:function\s+)?[A-Za-z_][A-Za-z0-9_]*\s*\(\)\s*\{?$", line) is not None
+        or re.match(r"^function\s+[A-Za-z_][A-Za-z0-9_]*\s*\{?$", line) is not None
+    )
+
+
+def _looks_like_shell_case_label(line: str) -> bool:
+    return re.match(r"^(?:\*|[-A-Za-z0-9_|]+)\)\s*$", line) is not None
+
+
+def _strip_command_wrappers(tokens: list[str]) -> list[str]:
+    index = 0
+    while index < len(tokens) and ENV_ASSIGNMENT_PATTERN.match(tokens[index]):
+        index += 1
+    while index < len(tokens):
+        token_name = Path(tokens[index]).name
+        if token_name == "env":
+            index += 1
+            while index < len(tokens) and (
+                tokens[index].startswith("-") or ENV_ASSIGNMENT_PATTERN.match(tokens[index])
+            ):
+                index += 1
+            continue
+        if token_name in COMMAND_WRAPPERS:
+            index += 1
+            continue
+        break
+    return tokens[index:]
+
+
+def _resolve_local_shell_target(current_path: Path, token: str | None, shell_targets: set[Path]) -> Path | None:
+    if token in {None, ""}:
+        return None
+    if any(marker in token for marker in ("$", "*", "{", "}", "(", ")")):
+        return None
+    raw = Path(token)
+    candidates: list[Path] = []
+    if raw.is_absolute():
+        candidates.append(raw.resolve())
+    else:
+        candidates.append((current_path.parent / raw).resolve())
+    if raw.suffix == "":
+        candidates.extend(candidate.with_suffix(".sh") for candidate in list(candidates))
+    for candidate in candidates:
+        if candidate in shell_targets:
+            return candidate
+    return None
+
+
+def _normalize_tool_command(
+    command_tokens: list[str],
+    *,
+    repo_root: Path,
+    current_path: Path,
+) -> str | None:
+    if not command_tokens:
+        return None
+    head = command_tokens[0]
+    head_name = Path(head).name
+    if head in {".", "source"} or head_name in SHELL_CONTROL_KEYWORDS or head_name in SHELL_BUILTINS:
+        return None
+    if (
+        not head_name
+        or head_name.startswith("-")
+        or head_name.endswith(":")
+        or head_name.endswith(")")
+        or head_name.endswith("()")
+        or any(marker in head_name for marker in ("$", "{", "}"))
+        or head_name.isupper()
+        or not any(character.isalnum() for character in head_name)
+    ):
+        return None
+    if head_name.startswith("python") and len(command_tokens) > 2 and command_tokens[1] == "-m":
+        return command_tokens[2].split(".", 1)[0]
+    if head_name in {"docker", "podman"} and len(command_tokens) > 1 and command_tokens[1] == "compose":
+        return f"{head_name} compose"
+    if head_name in SHELL_INTERPRETERS and len(command_tokens) > 1:
+        resolved = _resolve_repo_relative_path(current_path, command_tokens[1])
+        if resolved is not None and _is_tool_wrapper_path(repo_root, resolved):
+            return resolved.name
+        if resolved is not None and resolved.is_file():
+            return None
+        return head_name
+    if "/" in head or head.startswith("."):
+        resolved = _resolve_repo_relative_path(current_path, head)
+        if resolved is not None and _is_tool_wrapper_path(repo_root, resolved):
+            return resolved.name
+        if resolved is not None and resolved.is_file():
+            return None
+        return head_name or head
+    return head_name
+
+
+def _resolve_repo_relative_path(current_path: Path, token: str) -> Path | None:
+    raw = Path(token)
+    candidate = raw if raw.is_absolute() else current_path.parent / raw
+    try:
+        resolved = candidate.resolve()
+    except OSError:
+        return None
+    return resolved if resolved.exists() else None
+
+
+def _is_tool_wrapper_path(repo_root: Path, path: Path) -> bool:
+    try:
+        relative_parts = path.relative_to(repo_root).parts
+    except ValueError:
+        return False
+    return relative_parts[: len(TOOL_WRAPPER_DIR_PARTS)] == TOOL_WRAPPER_DIR_PARTS
+
+
+def _normalize_sql_identifier(identifier: str) -> str:
+    cleaned_parts = [
+        part.strip().strip('`"[]')
+        for part in identifier.strip().rstrip(",)").split(".")
+        if part.strip().strip('`"[]')
+    ]
+    return ".".join(cleaned_parts)
+
+
+def _sql_table_summary_label(table_name: str, source_files: set[str]) -> str:
+    lines = [table_name]
+    if not source_files:
+        lines.append("referenced table")
+        return "\n".join(lines)
+    if len(source_files) == 1:
+        lines.append(next(iter(sorted(source_files))))
+    else:
+        lines.append(f"{len(source_files)} schema files")
+        lines.append("examples: " + ", ".join(sorted(source_files)[:2]))
+    return "\n".join(lines)
+
+
+def _relative_repo_path(repo_root: Path, path: Path) -> str:
+    return path.relative_to(repo_root).as_posix()
+
+
+def _unique_alias(prefix: str, label: str, counts: dict[str, int]) -> str:
+    base = re.sub(r"[^A-Za-z0-9_]+", "_", label).strip("_").lower() or prefix
+    if base[0].isdigit():
+        base = f"{prefix}_{base}"
+    counts[base] = counts.get(base, 0) + 1
+    suffix = "" if counts[base] == 1 else f"_{counts[base]}"
+    return f"{prefix}_{base}{suffix}"
 
 
 def _normalize_drawio_sources(steps: list[RenderStep]) -> None:

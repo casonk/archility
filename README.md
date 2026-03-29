@@ -1,6 +1,6 @@
 # archility
 
-Architecture toolchain bootstrap, render orchestration, inventory, deterministic starter scaffolding, Python code-introspection diagram generation, and agentic architecture-authoring support for portfolio repositories.
+Architecture toolchain bootstrap, render orchestration, inventory, deterministic starter scaffolding, supplemental code-introspection diagram generation, and agentic architecture-authoring support for portfolio repositories.
 
 `archility` is the shared utility repo for architecture-aware maintenance across the portfolio. It owns the shared bootstrap path for PlantUML, Draw.io, Graphviz-backed PlantUML rendering, and related rendering flows, in addition to the audit CLI for architecture artifacts and documentation coverage.
 
@@ -10,7 +10,7 @@ The shared portfolio standards live in `./util-repos/traction-control` from the 
 
 - Bootstrap the shared local architecture toolchain in one place instead of duplicating binary download logic in feature repos.
 - Render PlantUML and Draw.io architecture artifacts for target repositories through a shared entry point.
-- Derive supplemental Python import and UML diagrams with `pydeps` and `pyreverse` when a target repo exposes Python package or module roots.
+- Derive supplemental introspection diagrams for detected Python packages/modules, shell scripts, SQL/schema files, and tooling entrypoints.
 - Support richer Graphviz-backed PlantUML diagrams in addition to the Smetana-based starter baseline.
 - Audit one or more repositories for architecture-adjacent baseline files.
 - Generate the standard deterministic architecture starter layout used across the portfolio:
@@ -41,7 +41,7 @@ See `docs/portfolio-architecture-toolchain.md` for the concrete conventions and 
 
 - `archility generate` creates the starter architecture strictly from repository code and layout markers.
 - This path is deterministic and is meant for baseline scaffolding, refreshable starter docs, and repeatable portfolio-wide rollouts.
-- For Python repos, `archility render` can also derive deterministic `pydeps` and `pyreverse` sidecar diagrams from the detected top-level Python package or module targets.
+- `archility render` can also derive deterministic supplemental sidecars from detected Python packages/modules, shell scripts, SQL/schema files, and tooling entrypoints.
 
 2. Agentic path
 
@@ -58,7 +58,7 @@ Use the programmatic path for consistency and the agentic path for depth.
 - Inspection path: `src/archility/audit.py` inventories architecture assets, workflow coverage, source roots, and documented toolchain hints, then emits text or JSON reports.
 - Deterministic scaffolding path: `src/archility/generate.py` derives starter blueprints and diagram sources strictly from repository structure.
 - Agentic authoring path: a repository-specific AI inspection rewrites those standard files with richer architecture once the repo is actually understood.
-- Render path: `src/archility/render.py` turns PlantUML and Draw.io sources into checked-in SVG and PNG artifacts for target repos, and can also derive `pydeps` SVG import graphs plus `pyreverse` PlantUML sources/renders for Python repos.
+- Render path: `src/archility/render.py` turns PlantUML and Draw.io sources into checked-in SVG and PNG artifacts for target repos, and can also derive Python import/UML sidecars plus managed PlantUML sidecars for shell flow, database schema, and tooling integration views.
 - Shared bootstrap path: `setup.sh` provisions the local wrappers under `tools/bin/` for PlantUML, Draw.io, `pydeps`, `pyreverse`, and optional Graphviz-backed PlantUML rendering.
 - Validation path: `tests/test_audit.py`, `tests/test_generate.py`, `tests/test_render.py`, and `.github/workflows/ci.yml` keep the lifecycle behavior aligned.
 
@@ -97,7 +97,7 @@ Render architecture diagrams for another repository after bootstrapping the shar
 archility render ../../personal-finance
 ```
 
-Render is shared infrastructure for both paths. The source diagrams may come from deterministic scaffolding or from a deeper agent-authored architecture pass. For Python repos, the same render pass also derives supplemental `pydeps` and `pyreverse` diagrams from detected package or module roots.
+Render is shared infrastructure for both paths. The source diagrams may come from deterministic scaffolding or from a deeper agent-authored architecture pass. The same render pass can also derive supplemental deterministic sidecars for Python package/module structure, shell-script flow, SQL/schema relationships, and third-party tooling entrypoints when those signals are present.
 
 Audit multiple repositories and emit JSON:
 
@@ -111,7 +111,7 @@ Example text output fields:
 - whether `AGENTS.md` and `LESSONSLEARNED.md` exist
 - whether `docs/contributor-architecture-blueprint.md` exists
 - whether the standard `docs/diagrams/repo-architecture.{puml,drawio}` starter files were generated or already existed
-- whether Python repos are documenting `pydeps` and `pyreverse` in the shared diagram toolchain hints
+- whether contributor-facing docs mention shared diagram toolchain hints such as `pydeps`, `pyreverse`, PlantUML, Draw.io, and related render tools
 - how many workflow, diagram-source, and render-artifact files were found
 - which diagram formats were detected
 - which architecture toolchains were detected, including PlantUML, Draw.io, `pydeps`, `pyreverse`, and Inkscape hints where present
@@ -120,7 +120,7 @@ Example text output fields:
 
 The generated starter PlantUML diagrams use Smetana, so they do not depend on a local Graphviz install. `archility` still treats Graphviz as a supported part of the shared toolchain because richer custom PlantUML diagrams may rely on `dot`.
 
-The `pydeps` and `pyreverse` outputs are supplemental deterministic introspection diagrams. They help explain Python package and module structure, but they do not replace the repo-authored `docs/contributor-architecture-blueprint.md` or the paired `repo-architecture` sources.
+The supplemental sidecars are deterministic introspection diagrams. The Python path uses `pydeps` and `pyreverse`; the shell, database, and tooling paths emit managed PlantUML sources/renders directly from repository content. These assets help explain code structure and operational boundaries, but they do not replace the repo-authored `docs/contributor-architecture-blueprint.md` or the paired `repo-architecture` sources.
 
 For Draw.io diagrams, prefer plain identifier text inside diagram labels when checked-in PNG exports matter. Backticks can render inconsistently in draw.io's direct PNG export path even when the SVG looks acceptable.
 

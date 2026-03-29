@@ -1,5 +1,10 @@
 @startuml classes_archility
 set namespaceSeparator none
+class "DatabaseDiagramPlan" as archility.render.DatabaseDiagramPlan {
+  repo_root : Path
+  source : Path
+  targets : tuple[Path, ...]
+}
 class "DrawioBounds" as archility.generate.DrawioBounds {
   bottom : int
   height : int
@@ -50,6 +55,8 @@ class "PythonModuleInfo" as archility.render.PythonModuleInfo {
 class "RenderStep" as archility.render.RenderStep {
   command : list[str]
   cwd : str | None
+  internal_action : RenderAction | None
+  is_internal : bool
   output : str
   outputs : tuple[str, ...]
   produced_output : str
@@ -72,5 +79,15 @@ class "RepoAudit" as archility.audit.RepoAudit {
   toolchains : list[str]
   workflow_count : int
   to_dict() -> dict[str, object]
+}
+class "ShellDiagramPlan" as archility.render.ShellDiagramPlan {
+  repo_root : Path
+  source : Path
+  targets : tuple[Path, ...]
+}
+class "ToolingDiagramPlan" as archility.render.ToolingDiagramPlan {
+  repo_root : Path
+  source : Path
+  targets : tuple[Path, ...]
 }
 @enduml
