@@ -1041,9 +1041,8 @@ def _build_tooling_graph_text(plan: ToolingDiagramPlan) -> str:
             relative,
             f"{len(tools)} detected tool{'s' if len(tools) != 1 else ''}",
         ]
-        lines.append(
-            f'rectangle "{_escape_plantuml_label("\\n".join(label_lines))}" as {source_aliases[path]} #E0F2FE'
-        )
+        label_text = _escape_plantuml_label("\n".join(label_lines))
+        lines.append(f'rectangle "{label_text}" as {source_aliases[path]} #E0F2FE')
     for tool_name in sorted(all_tools):
         lines.append(f'cloud "{_escape_plantuml_label(tool_name)}" as {tool_aliases[tool_name]} #FEF3C7')
     for path in sorted(plan.targets, key=lambda entry: _relative_repo_path(plan.repo_root, entry)):
