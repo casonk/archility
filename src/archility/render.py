@@ -453,19 +453,20 @@ def _normalize_pyreverse_outputs(step: RenderStep) -> None:
 def _collect_python_module_info(repo_root: Path) -> dict[str, PythonModuleInfo]:
     module_info: dict[str, PythonModuleInfo] = {}
     for target in collect_python_diagram_targets(repo_root):
-        source_root = _pyreverse_source_root(target)
         for path in _iter_python_files_for_target(target):
-            module_name = _python_module_name(source_root, path)
-            if module_name in module_info:
+            module_aliases = _python_module_aliases(repo_root, target, path)
+            if not module_aliases:
                 continue
             class_count, function_count = _count_top_level_python_symbols(path)
-            module_info[module_name] = PythonModuleInfo(
-                name=module_name,
+            info = PythonModuleInfo(
+                name=module_aliases[0],
                 path=path,
                 is_package=path.name == "__init__.py",
                 class_count=class_count,
                 function_count=function_count,
             )
+            for module_name in module_aliases:
+                module_info.setdefault(module_name, info)
     return module_info
 
 
@@ -488,6 +489,16 @@ def _python_module_name(source_root: Path, path: Path) -> str:
     if parts and parts[-1] == "__init__":
         parts = parts[:-1]
     return ".".join(parts)
+
+
+def _python_module_aliases(repo_root: Path, target: Path, path: Path) -> tuple[str, ...]:
+    aliases: list[str] = []
+    for source_root in (_pyreverse_source_root(target), repo_root):
+        module_name = _python_module_name(source_root, path)
+        if not module_name or module_name in aliases:
+            continue
+        aliases.append(module_name)
+    return tuple(aliases)
 
 
 def _count_top_level_python_symbols(path: Path) -> tuple[int, int]:
@@ -539,7 +550,7 @@ def _normalize_pyreverse_class_source(
     if _count_pyreverse_class_entities(text) > LOW_SIGNAL_PYREVERSE_CLASS_THRESHOLD:
         return
 
-    module_count = len(module_info)
+    module_count = len(_unique_python_module_info(module_info))
     pydeps_names = ", ".join(path.name for path in pydeps_outputs)
     note_lines = [
         "note as archilityPythonSurfaceNote",
@@ -581,20 +592,20 @@ def _parse_pyreverse_package_source(text: str) -> tuple[str, list[tuple[str, str
 def _python_package_summary_label(package_name: str, module_info: dict[str, PythonModuleInfo]) -> str:
     direct_children: list[PythonModuleInfo] = []
     prefix = f"{package_name}."
-    for info in module_info.values():
-        if info.name == package_name:
+    for module_name, info in module_info.items():
+        if module_name == package_name:
             continue
-        if not info.name.startswith(prefix):
+        if not module_name.startswith(prefix):
             continue
-        remainder = info.name[len(prefix) :]
+        remainder = module_name[len(prefix) :]
         if "." in remainder:
             continue
         direct_children.append(info)
 
     package_modules = sum(
         1
-        for info in module_info.values()
-        if info.name == package_name or info.name.startswith(prefix)
+        for module_name in module_info
+        if module_name == package_name or module_name.startswith(prefix)
     )
     child_package_count = sum(1 for info in direct_children if info.is_package)
     child_module_count = sum(1 for info in direct_children if not info.is_package)
@@ -617,6 +628,13 @@ def _count_pyreverse_class_entities(text: str) -> int:
 
 def _escape_plantuml_label(label: str) -> str:
     return label.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
+def _unique_python_module_info(module_info: dict[str, PythonModuleInfo]) -> list[PythonModuleInfo]:
+    unique_by_path: dict[Path, PythonModuleInfo] = {}
+    for info in module_info.values():
+        unique_by_path.setdefault(info.path, info)
+    return list(unique_by_path.values())
 
 
 def _normalize_drawio_sources(steps: list[RenderStep]) -> None:

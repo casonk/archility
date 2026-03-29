@@ -502,6 +502,54 @@ class RenderTests(unittest.TestCase):
             self.assertIn('rectangle "demo.cli\\n1 python file" as demo.cli', normalized)
             self.assertNotIn('package "demo" as demo {', normalized)
 
+    def test_run_render_steps_rewrites_package_diagram_for_mixed_source_roots(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp) / "demo"
+            (repo_root / "docs" / "diagrams").mkdir(parents=True)
+            (repo_root / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+            (repo_root / "scripts").mkdir()
+            (repo_root / "scripts" / "extract_education.py").write_text("def extract() -> None:\n    pass\n")
+            (repo_root / "talkmap.py").write_text("def build_map() -> None:\n    pass\n")
+            tool_root = repo_root / "tool-home" / "tools" / "bin"
+            tool_root.mkdir(parents=True)
+            for tool_name in ("plantuml", "pydeps", "pyreverse"):
+                (tool_root / tool_name).write_text("#!/usr/bin/env bash\n")
+
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
+
+            def runner(command: list[str], cwd: str | None) -> None:
+                if command[0].endswith("pyreverse"):
+                    (repo_root / "docs" / "diagrams" / "classes_demo.puml").write_text("@startuml\n@enduml\n")
+                    (repo_root / "docs" / "diagrams" / "packages_demo.puml").write_text(
+                        "@startuml packages_demo\n"
+                        'package "scripts.extract_education" as scripts.extract_education {\n'
+                        "}\n"
+                        'package "talkmap" as talkmap {\n'
+                        "}\n"
+                        "@enduml\n"
+                    )
+                elif command[0].endswith("pydeps"):
+                    output = repo_root / command[command.index("-o") + 1]
+                    output.write_text("<svg />\n")
+                elif "-tsvg" in command:
+                    source_name = Path(command[-1]).name
+                    if source_name == "python-classes.puml":
+                        (repo_root / "docs" / "diagrams" / "classes_demo.svg").write_text("<svg />\n")
+                    else:
+                        (repo_root / "docs" / "diagrams" / "packages_demo.svg").write_text("<svg />\n")
+                elif "-tpng" in command:
+                    source_name = Path(command[-1]).name
+                    if source_name == "python-classes.puml":
+                        (repo_root / "docs" / "diagrams" / "classes_demo.png").write_text("png\n")
+                    else:
+                        (repo_root / "docs" / "diagrams" / "packages_demo.png").write_text("png\n")
+
+            run_render_steps(steps, runner=runner)
+
+            normalized = (repo_root / "docs" / "diagrams" / "python-packages.puml").read_text(encoding="utf-8")
+            self.assertIn('rectangle "scripts.extract_education\\n1 python file" as scripts.extract_education', normalized)
+            self.assertIn('rectangle "talkmap\\n1 python file" as talkmap', normalized)
+
 
 if __name__ == "__main__":
     unittest.main()
