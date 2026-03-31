@@ -283,7 +283,7 @@ class RenderTests(unittest.TestCase):
 
             def runner(command: list[str], cwd: str | None) -> None:
                 if "-tsvg" in command:
-                    (repo_root / "docs" / "diagrams" / "repo-architecture.svg").write_text("<svg />\n")
+                    (repo_root / "docs" / "diagrams" / "repo-architecture.svg").write_text("<svg />")
                 elif "-tpng" in command:
                     (repo_root / "docs" / "diagrams" / "repo-architecture.png").write_text("png\n")
 
@@ -293,6 +293,10 @@ class RenderTests(unittest.TestCase):
             self.assertTrue((repo_root / "docs" / "diagrams" / "repo-architecture.puml.png").exists())
             self.assertFalse((repo_root / "docs" / "diagrams" / "repo-architecture.svg").exists())
             self.assertFalse((repo_root / "docs" / "diagrams" / "repo-architecture.png").exists())
+            self.assertEqual(
+                (repo_root / "docs" / "diagrams" / "repo-architecture.puml.svg").read_bytes(),
+                b"<svg />\n",
+            )
 
     def test_run_render_steps_normalizes_drawio_edge_styles_before_export(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -337,7 +341,7 @@ class RenderTests(unittest.TestCase):
 
             def runner(command: list[str], cwd: str | None) -> None:
                 output = Path(command[command.index("-o") + 1])
-                output.write_text("<svg />\n" if output.suffix == ".svg" else "png\n")
+                output.write_text("<svg />" if output.suffix == ".svg" else "png\n")
 
             run_render_steps(steps, runner=runner)
 
@@ -352,6 +356,10 @@ class RenderTests(unittest.TestCase):
             self.assertNotEqual(edge_500[1][1], edge_501[1][1])
             self.assertTrue((repo_root / "docs" / "diagrams" / "repo-architecture.drawio.svg").exists())
             self.assertTrue((repo_root / "docs" / "diagrams" / "repo-architecture.drawio.png").exists())
+            self.assertEqual(
+                (repo_root / "docs" / "diagrams" / "repo-architecture.drawio.svg").read_bytes(),
+                b"<svg />\n",
+            )
 
     def test_run_render_steps_routes_drawio_edges_through_open_corridors(self):
         with tempfile.TemporaryDirectory() as tmp:

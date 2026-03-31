@@ -31,6 +31,7 @@ PYDEPS_PREFIX = "python-import-deps-"
 SHELL_GRAPH_FILENAME = "shell-call-graph.puml"
 DATABASE_GRAPH_FILENAME = "database-schema.puml"
 TOOLING_GRAPH_FILENAME = "tooling-integrations.puml"
+NORMALIZED_TEXT_OUTPUT_SUFFIXES = {".svg"}
 DRAWIO_EDGE_STYLE_DEFAULTS = (
     ("jumpStyle", "arc"),
     ("jumpSize", "10"),
@@ -625,6 +626,16 @@ def _ensure_step_output(source: str, produced_path: Path, target_path: Path) -> 
         raise FileNotFoundError(
             f"Expected render output was not produced for {source}: {target_path}"
         )
+    _normalize_text_output(target_path)
+
+
+def _normalize_text_output(path: Path) -> None:
+    if path.suffix.lower() not in NORMALIZED_TEXT_OUTPUT_SUFFIXES or not path.exists():
+        return
+    payload = path.read_bytes()
+    if payload.endswith(b"\n"):
+        return
+    path.write_bytes(payload + b"\n")
 
 
 def _is_package_target(path: Path) -> bool:

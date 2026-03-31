@@ -5,8 +5,8 @@ skinparam shadowing false
 skinparam defaultFontName Monospace
 skinparam componentStyle rectangle
 skinparam linetype ortho
-rectangle ".github/workflows/ci.yml\\n7 detected tools" as source_github_workflows_ci_yml #E0F2FE
-rectangle "setup.sh\\n7 detected tools" as source_setup_sh #E0F2FE
+rectangle ".github/workflows/ci.yml\n7 detected tools" as source_github_workflows_ci_yml #E0F2FE
+rectangle "setup.sh\n7 detected tools" as source_setup_sh #E0F2FE
 cloud "actions/checkout" as tool_actions_checkout #FEF3C7
 cloud "actions/setup-python" as tool_actions_setup_python #FEF3C7
 cloud "archility" as tool_archility #FEF3C7
