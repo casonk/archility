@@ -1548,13 +1548,92 @@ def _build_drawio_edge_routes(
         target_groups.setdefault((target_id, _drawio_target_side(orientation)), []).append(edge_id)
         lane_groups.setdefault(_drawio_lane_group_key(orientation, target_bounds), []).append(edge_id)
 
+    # Precompute one center corridor per lane group sequentially so that each
+    # group's selection treats corridors already claimed by earlier groups as
+    # blocked.  This prevents multiple independent lane groups from piling onto
+    # the same corridor segment and producing overlapping edges in the export.
+    clearance = 24.0
+    lane_gap = 18.0
+    # Track assigned corridor coordinates by axis (horizontal covers left+right,
+    # vertical covers up+down) so that edges of opposite orientations that share
+    # the same corridor plane do not collide.
+    axis_assigned_corridors: dict[str, list[float]] = {"horizontal": [], "vertical": []}
+    lane_group_corridor: dict[tuple, float] = {}
+    processed_lane_keys: set = set()
+
+    for edge_id, source_id, target_id, orientation in edges:
+        source_bounds = bounds_by_cell_id[source_id]
+        target_bounds = bounds_by_cell_id[target_id]
+        lane_key = _drawio_lane_group_key(orientation, target_bounds)
+        if lane_key in processed_lane_keys:
+            continue
+        processed_lane_keys.add(lane_key)
+
+        lane_group = lane_groups[lane_key]
+        lane_count = len(lane_group)
+        # Block already-claimed corridors with a band wide enough to keep
+        # the outermost lane of the new group clear.
+        half_band = max(lane_count - 1, 0) / 2 * lane_gap + lane_gap * 1.5
+        axis = "horizontal" if orientation in {"left", "right"} else "vertical"
+        extra_blocked = [
+            (c - half_band, c + half_band)
+            for c in axis_assigned_corridors[axis]
+        ]
+
+        if orientation in {"down", "up"}:
+            exit_x = (source_bounds.left + source_bounds.right) / 2
+            entry_x = (target_bounds.left + target_bounds.right) / 2
+            if orientation == "down":
+                span_start = source_bounds.bottom + clearance
+                span_end = target_bounds.top - clearance
+            else:
+                span_start = source_bounds.top - clearance
+                span_end = target_bounds.bottom + clearance
+            corridor = _select_drawio_vertical_corridor(
+                bounds_by_cell_id,
+                excluded_ids={source_id, target_id},
+                span_start=span_start,
+                span_end=span_end,
+                preferred_positions=(exit_x, entry_x, (exit_x + entry_x) / 2),
+                lane_index=0,
+                lane_count=1,
+                lane_gap=lane_gap,
+                padding=clearance,
+                extra_blocked_intervals=extra_blocked,
+            )
+        else:
+            exit_y = (source_bounds.top + source_bounds.bottom) / 2
+            entry_y = (target_bounds.top + target_bounds.bottom) / 2
+            if orientation == "right":
+                span_start = source_bounds.right + clearance
+                span_end = target_bounds.left - clearance
+            else:
+                span_start = source_bounds.left - clearance
+                span_end = target_bounds.right + clearance
+            corridor = _select_drawio_horizontal_corridor(
+                bounds_by_cell_id,
+                excluded_ids={source_id, target_id},
+                span_start=span_start,
+                span_end=span_end,
+                preferred_positions=(exit_y, entry_y, (exit_y + entry_y) / 2),
+                lane_index=0,
+                lane_count=1,
+                lane_gap=lane_gap,
+                padding=clearance,
+                extra_blocked_intervals=extra_blocked,
+            )
+
+        lane_group_corridor[lane_key] = corridor
+        axis_assigned_corridors[axis].append(corridor)
+
     routes: dict[str, list[tuple[float, float]]] = {}
     for edge_id, source_id, target_id, orientation in edges:
         source_bounds = bounds_by_cell_id[source_id]
         target_bounds = bounds_by_cell_id[target_id]
         source_group = source_groups[(source_id, _drawio_source_side(orientation))]
         target_group = target_groups[(target_id, _drawio_target_side(orientation))]
-        lane_group = lane_groups[_drawio_lane_group_key(orientation, target_bounds)]
+        lane_key = _drawio_lane_group_key(orientation, target_bounds)
+        lane_group = lane_groups[lane_key]
         source_index = source_group.index(edge_id)
         target_index = target_group.index(edge_id)
         lane_index = lane_group.index(edge_id)
@@ -1574,6 +1653,7 @@ def _build_drawio_edge_routes(
             target_count=target_count,
             lane_index=lane_index,
             lane_count=lane_count,
+            precomputed_corridor=lane_group_corridor.get(lane_key),
         )
     return routes
 
@@ -1666,10 +1746,12 @@ def _drawio_route_points(
     target_count: int,
     lane_index: int,
     lane_count: int,
+    precomputed_corridor: float | None = None,
 ) -> list[tuple[float, float]]:
     anchor_margin = 40.0
     clearance = 24.0
     lane_gap = 18.0
+    lane_offset = 0.0 if lane_count <= 1 else (lane_index - (lane_count - 1) / 2) * lane_gap
 
     if orientation in {"down", "up"}:
         exit_x = _spread_positions(source.left + anchor_margin, source.right - anchor_margin, source_count)[source_index]
@@ -1684,17 +1766,20 @@ def _drawio_route_points(
         else:
             source_buffer_y = source.top - clearance
             target_buffer_y = target.bottom + clearance
-        corridor_x = _select_drawio_vertical_corridor(
-            bounds_by_cell_id,
-            excluded_ids={source_id, target_id},
-            span_start=source_buffer_y,
-            span_end=target_buffer_y,
-            preferred_positions=(exit_x, entry_x, (exit_x + entry_x) / 2),
-            lane_index=lane_index,
-            lane_count=lane_count,
-            lane_gap=lane_gap,
-            padding=clearance,
-        )
+        if precomputed_corridor is not None:
+            corridor_x = precomputed_corridor + lane_offset
+        else:
+            corridor_x = _select_drawio_vertical_corridor(
+                bounds_by_cell_id,
+                excluded_ids={source_id, target_id},
+                span_start=source_buffer_y,
+                span_end=target_buffer_y,
+                preferred_positions=(exit_x, entry_x, (exit_x + entry_x) / 2),
+                lane_index=lane_index,
+                lane_count=lane_count,
+                lane_gap=lane_gap,
+                padding=clearance,
+            )
         return _simplify_drawio_route(
             [
                 (exit_x, source_buffer_y),
@@ -1716,17 +1801,20 @@ def _drawio_route_points(
     else:
         source_buffer_x = source.left - clearance
         target_buffer_x = target.right + clearance
-    corridor_y = _select_drawio_horizontal_corridor(
-        bounds_by_cell_id,
-        excluded_ids={source_id, target_id},
-        span_start=source_buffer_x,
-        span_end=target_buffer_x,
-        preferred_positions=(exit_y, entry_y, (exit_y + entry_y) / 2),
-        lane_index=lane_index,
-        lane_count=lane_count,
-        lane_gap=lane_gap,
-        padding=clearance,
-    )
+    if precomputed_corridor is not None:
+        corridor_y = precomputed_corridor + lane_offset
+    else:
+        corridor_y = _select_drawio_horizontal_corridor(
+            bounds_by_cell_id,
+            excluded_ids={source_id, target_id},
+            span_start=source_buffer_x,
+            span_end=target_buffer_x,
+            preferred_positions=(exit_y, entry_y, (exit_y + entry_y) / 2),
+            lane_index=lane_index,
+            lane_count=lane_count,
+            lane_gap=lane_gap,
+            padding=clearance,
+        )
     return _simplify_drawio_route(
         [
             (source_buffer_x, exit_y),
@@ -1748,6 +1836,7 @@ def _select_drawio_horizontal_corridor(
     lane_count: int,
     lane_gap: float,
     padding: float,
+    extra_blocked_intervals: list[tuple[float, float]] | None = None,
 ) -> float:
     blocked_intervals = _drawio_blocked_intervals_for_horizontal_span(
         bounds_by_cell_id,
@@ -1756,6 +1845,8 @@ def _select_drawio_horizontal_corridor(
         span_end=span_end,
         padding=padding,
     )
+    if extra_blocked_intervals:
+        blocked_intervals = blocked_intervals + extra_blocked_intervals
     lower_bound, upper_bound = _drawio_routing_bounds(bounds_by_cell_id, axis="y", padding=padding)
     return _select_drawio_corridor_coordinate(
         blocked_intervals,
@@ -1779,6 +1870,7 @@ def _select_drawio_vertical_corridor(
     lane_count: int,
     lane_gap: float,
     padding: float,
+    extra_blocked_intervals: list[tuple[float, float]] | None = None,
 ) -> float:
     blocked_intervals = _drawio_blocked_intervals_for_vertical_span(
         bounds_by_cell_id,
@@ -1787,6 +1879,8 @@ def _select_drawio_vertical_corridor(
         span_end=span_end,
         padding=padding,
     )
+    if extra_blocked_intervals:
+        blocked_intervals = blocked_intervals + extra_blocked_intervals
     lower_bound, upper_bound = _drawio_routing_bounds(bounds_by_cell_id, axis="x", padding=padding)
     return _select_drawio_corridor_coordinate(
         blocked_intervals,
