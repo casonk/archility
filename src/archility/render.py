@@ -1670,9 +1670,15 @@ def _build_drawio_edge_routes(
     bounds_by_cell_id: dict[str, DrawioCellBounds],
 ) -> dict[str, list[tuple[float, float]]]:
     edges: list[tuple[str, str, str, str]] = []
+    edge_src_tgt: dict[str, tuple[str, str]] = {}
     source_groups: dict[tuple[str, str], list[str]] = {}
     target_groups: dict[tuple[str, str], list[str]] = {}
-    lane_groups: dict[tuple[str, int], list[str]] = {}
+    # Lane groups key: (orientation, target_id) — groups edges that share the
+    # same target node and orientation.  Using the actual target_id (rather than
+    # a rounded mid_y) prevents unrelated edges whose targets happen to share
+    # the same y-coordinate from pooling into one group and inheriting a
+    # corridor computed from a short-span representative.
+    lane_groups: dict[tuple[str, str], list[str]] = {}
 
     for cell in root.iter("mxCell"):
         if cell.attrib.get("edge") != "1":
@@ -1690,9 +1696,10 @@ def _build_drawio_edge_routes(
             continue
         orientation = _drawio_edge_orientation(source_bounds, target_bounds)
         edges.append((edge_id, source_id, target_id, orientation))
+        edge_src_tgt[edge_id] = (source_id, target_id)
         source_groups.setdefault((source_id, _drawio_source_side(orientation)), []).append(edge_id)
         target_groups.setdefault((target_id, _drawio_target_side(orientation)), []).append(edge_id)
-        lane_groups.setdefault(_drawio_lane_group_key(orientation, target_bounds), []).append(edge_id)
+        lane_groups.setdefault((orientation, target_id), []).append(edge_id)
 
     # Precompute one center corridor per lane group sequentially so that each
     # group's selection treats corridors already claimed by earlier groups as
@@ -1712,9 +1719,7 @@ def _build_drawio_edge_routes(
     processed_lane_keys: set = set()
 
     for edge_id, source_id, target_id, orientation in edges:
-        source_bounds = bounds_by_cell_id[source_id]
-        target_bounds = bounds_by_cell_id[target_id]
-        lane_key = _drawio_lane_group_key(orientation, target_bounds)
+        lane_key = (orientation, target_id)
         if lane_key in processed_lane_keys:
             continue
         processed_lane_keys.add(lane_key)
@@ -1729,17 +1734,29 @@ def _build_drawio_edge_routes(
             (c - half_band, c + half_band)
             for c in axis_assigned_corridors[axis]
         ]
-        excluded = {source_id, target_id} | container_ids
+        # Use the union of all source/target spans in the group so that the
+        # precomputed corridor is valid for every edge in the group, not only
+        # the first one.  Exclude all group sources and targets from the
+        # obstacle list so they don't block their own corridor.
+        excluded = set(container_ids)
+        all_src: list[DrawioCellBounds] = []
+        all_tgt: list[DrawioCellBounds] = []
+        for eid in lane_group:
+            sid, tid = edge_src_tgt[eid]
+            excluded.add(sid)
+            excluded.add(tid)
+            all_src.append(bounds_by_cell_id[sid])
+            all_tgt.append(bounds_by_cell_id[tid])
 
         if orientation in {"down", "up"}:
-            exit_x = (source_bounds.left + source_bounds.right) / 2
-            entry_x = (target_bounds.left + target_bounds.right) / 2
+            exit_x = sum(b.mid_x for b in all_src) / len(all_src)
+            entry_x = all_tgt[0].mid_x
             if orientation == "down":
-                span_start = source_bounds.bottom + clearance
-                span_end = target_bounds.top - clearance
+                span_start = min(b.bottom + clearance for b in all_src)
+                span_end = max(b.top - clearance for b in all_tgt)
             else:
-                span_start = source_bounds.top - clearance
-                span_end = target_bounds.bottom + clearance
+                span_start = max(b.top - clearance for b in all_src)
+                span_end = min(b.bottom + clearance for b in all_tgt)
             corridor = _select_drawio_vertical_corridor(
                 bounds_by_cell_id,
                 excluded_ids=excluded,
@@ -1753,20 +1770,20 @@ def _build_drawio_edge_routes(
                 extra_blocked_intervals=extra_blocked,
             )
         else:
-            exit_y = (source_bounds.top + source_bounds.bottom) / 2
-            entry_y = (target_bounds.top + target_bounds.bottom) / 2
+            entry_y = all_tgt[0].mid_y
+            exit_y = sum(b.mid_y for b in all_src) / len(all_src)
             if orientation == "right":
-                span_start = source_bounds.right + clearance
-                span_end = target_bounds.left - clearance
+                span_start = min(b.right + clearance for b in all_src)
+                span_end = max(b.left - clearance for b in all_tgt)
             else:
-                span_start = source_bounds.left - clearance
-                span_end = target_bounds.right + clearance
+                span_start = max(b.left - clearance for b in all_src)
+                span_end = min(b.right + clearance for b in all_tgt)
             corridor = _select_drawio_horizontal_corridor(
                 bounds_by_cell_id,
                 excluded_ids=excluded,
                 span_start=span_start,
                 span_end=span_end,
-                preferred_positions=(exit_y, entry_y, (exit_y + entry_y) / 2),
+                preferred_positions=(entry_y, exit_y, (entry_y + exit_y) / 2),
                 lane_index=0,
                 lane_count=1,
                 lane_gap=lane_gap,
@@ -1783,7 +1800,7 @@ def _build_drawio_edge_routes(
         target_bounds = bounds_by_cell_id[target_id]
         source_group = source_groups[(source_id, _drawio_source_side(orientation))]
         target_group = target_groups[(target_id, _drawio_target_side(orientation))]
-        lane_key = _drawio_lane_group_key(orientation, target_bounds)
+        lane_key = (orientation, target_id)
         lane_group = lane_groups[lane_key]
         source_index = source_group.index(edge_id)
         target_index = target_group.index(edge_id)
@@ -1912,11 +1929,17 @@ def _drawio_route_points(
             upper=target.right - anchor_margin / 2,
         )
         if orientation == "down":
+            gap = target.top - source.bottom
             source_buffer_y = source.bottom + clearance
             target_buffer_y = target.top - clearance
         else:
+            gap = source.top - target.bottom
             source_buffer_y = source.top - clearance
             target_buffer_y = target.bottom + clearance
+        # For nodes that are too close for the clearance buffer, let draw.io
+        # auto-route (return no explicit waypoints).
+        if gap < 2 * clearance:
+            return []
         if precomputed_corridor is not None:
             corridor_x = precomputed_corridor + lane_offset
         else:
@@ -1947,11 +1970,15 @@ def _drawio_route_points(
         upper=target.bottom - anchor_margin / 2,
     )
     if orientation == "right":
+        gap = target.left - source.right
         source_buffer_x = source.right + clearance
         target_buffer_x = target.left - clearance
     else:
+        gap = source.left - target.right
         source_buffer_x = source.left - clearance
         target_buffer_x = target.right + clearance
+    if gap < 2 * clearance:
+        return []
     if precomputed_corridor is not None:
         corridor_y = precomputed_corridor + lane_offset
     else:
@@ -2058,7 +2085,12 @@ def _drawio_blocked_intervals_for_horizontal_span(
     for cell_id, bounds in bounds_by_cell_id.items():
         if cell_id in excluded_ids:
             continue
-        if bounds.right + padding < left or bounds.left - padding > right:
+        # Exclude cells whose padded bounding box does not strictly overlap the
+        # span.  Using <= / >= (rather than < / >) means a cell whose padded
+        # edge exactly meets the span boundary is treated as outside rather than
+        # inside, preventing nodes in adjacent panels from blocking the corridor
+        # of an edge that routes between those panels.
+        if bounds.right + padding <= left or bounds.left - padding >= right:
             continue
         blocked.append((bounds.top - padding, bounds.bottom + padding))
     return blocked
@@ -2078,7 +2110,7 @@ def _drawio_blocked_intervals_for_vertical_span(
     for cell_id, bounds in bounds_by_cell_id.items():
         if cell_id in excluded_ids:
             continue
-        if bounds.bottom + padding < top or bounds.top - padding > bottom:
+        if bounds.bottom + padding <= top or bounds.top - padding >= bottom:
             continue
         blocked.append((bounds.left - padding, bounds.right + padding))
     return blocked
