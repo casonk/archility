@@ -510,6 +510,99 @@ class RenderTests(unittest.TestCase):
             self.assertNotEqual(c1, c3, "e1 and e3 share the same corridor")
             self.assertNotEqual(c2, c3, "e2 and e3 share the same corridor")
 
+    def test_run_render_steps_expands_panel_row_spacing_and_routes_inside_panels(self):
+        # A diagram with two panel containers whose children are only 30px
+        # apart (too tight for routing corridors).  After normalization the
+        # inter-row gaps must be expanded to _PANEL_MIN_ROW_GAP and edges
+        # crossing between the panels must use corridors inside the panel
+        # height range rather than routing above or below the entire diagram.
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp) / "demo"
+            (repo_root / "docs" / "diagrams").mkdir(parents=True)
+            source = repo_root / "docs" / "diagrams" / "repo-architecture.drawio"
+            source.write_text(
+                """<?xml version="1.0" encoding="utf-8"?>
+<mxfile host="app.diagrams.net">
+  <diagram id="repo-architecture" name="Repo Architecture">
+    <mxGraphModel>
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <!-- Left panel containing two stacked children (30px gap — too tight) -->
+        <mxCell id="panel_a" value="Panel A" vertex="1" parent="1">
+          <mxGeometry x="40" y="140" width="300" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="node_a1" value="A1" vertex="1" parent="1">
+          <mxGeometry x="60" y="200" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="node_a2" value="A2" vertex="1" parent="1">
+          <mxGeometry x="60" y="310" width="260" height="80" as="geometry" />
+        </mxCell>
+        <!-- Right panel with a single child -->
+        <mxCell id="panel_b" value="Panel B" vertex="1" parent="1">
+          <mxGeometry x="420" y="140" width="300" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="node_b1" value="B1" vertex="1" parent="1">
+          <mxGeometry x="440" y="210" width="260" height="80" as="geometry" />
+        </mxCell>
+        <!-- Cross-panel edge -->
+        <mxCell id="e1" edge="1" parent="1" source="node_a1" target="node_b1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
+""",
+                encoding="utf-8",
+            )
+            tool_root = repo_root / "tool-home" / "tools" / "bin"
+            tool_root.mkdir(parents=True)
+            (tool_root / "drawio").write_text("#!/usr/bin/env bash\n")
+
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
+
+            def runner(command: list[str], cwd: str | None) -> None:
+                output = Path(command[command.index("-o") + 1])
+                output.write_text("<svg />\n" if output.suffix == ".svg" else "png\n")
+
+            run_render_steps(steps, runner=runner)
+
+            normalized = source.read_text(encoding="utf-8")
+            document = ElementTree.fromstring(normalized)
+
+            # node_a2 should have been pushed down to create a ≥60px gap
+            a1_geo = document.find(".//mxCell[@id='node_a1']/mxGeometry")
+            a2_geo = document.find(".//mxCell[@id='node_a2']/mxGeometry")
+            self.assertIsNotNone(a1_geo)
+            self.assertIsNotNone(a2_geo)
+            a1_bottom = float(a1_geo.attrib["y"]) + float(a1_geo.attrib["height"])
+            a2_top = float(a2_geo.attrib["y"])
+            self.assertGreaterEqual(
+                a2_top - a1_bottom, 60,
+                f"inter-row gap should be ≥60px, got {a2_top - a1_bottom}"
+            )
+
+            # The cross-panel edge corridor must lie within the panel height
+            # range (not far above or below the diagram).
+            pts_e1 = self._edge_points(normalized, "e1")
+            corridor_y = next(
+                (first[1] for first, second in zip(pts_e1, pts_e1[1:]) if first[1] == second[1]),
+                None,
+            )
+            self.assertIsNotNone(corridor_y, "edge e1 must have a horizontal corridor segment")
+            panel_top = 140
+            panel_bottom = float(document.find(".//mxCell[@id='panel_a']/mxGeometry").attrib["y"]) + \
+                           float(document.find(".//mxCell[@id='panel_a']/mxGeometry").attrib["height"])
+            self.assertGreater(
+                corridor_y, panel_top - 50,
+                "corridor should not be far above the panels"
+            )
+            self.assertLess(
+                corridor_y, panel_bottom + 50,
+                "corridor should not be far below the panels"
+            )
+
     def test_run_render_steps_renames_pyreverse_outputs_and_renders_generated_sources(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = Path(tmp) / "demo"
