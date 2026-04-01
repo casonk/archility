@@ -37,6 +37,11 @@ DRAWIO_EDGE_STYLE_DEFAULTS = (
     ("jumpSize", "10"),
 )
 LOW_SIGNAL_PYREVERSE_CLASS_THRESHOLD = 1
+_PANEL_MIN_HEADER_GAP = 50.0
+_PANEL_MIN_ROW_GAP = 60.0
+_PANEL_MIN_FOOTER_GAP = 40.0
+_PANEL_NOTE_HEIGHT_THRESHOLD = 80.0
+_PANEL_MIN_NOTE_GAP = 25.0
 RunCommand = Callable[[list[str], str | None], None]
 RenderAction = Callable[[], None]
 SHELL_INTERPRETERS = {"bash", "sh", "zsh", "ksh"}
@@ -1449,9 +1454,10 @@ def _normalize_drawio_sources(steps: list[RenderStep]) -> None:
 def _normalize_drawio_source(source: Path) -> bool:
     tree = ElementTree.parse(source)
     root = tree.getroot()
+    spacing_changed = _normalize_drawio_panel_spacing(root)
     bounds_by_cell_id = _drawio_vertex_bounds(root)
     routing_plan = _build_drawio_edge_routes(root, bounds_by_cell_id)
-    changed = False
+    changed = spacing_changed
 
     for cell in root.iter("mxCell"):
         if cell.attrib.get("edge") != "1":
@@ -1519,6 +1525,146 @@ def _drawio_vertex_bounds(root: ElementTree.Element) -> dict[str, DrawioCellBoun
     return bounds
 
 
+def _drawio_container_ids(bounds_by_cell_id: dict[str, DrawioCellBounds]) -> set[str]:
+    """Return IDs of vertex cells that visually contain at least one other vertex cell.
+
+    Container cells are visual grouping boxes (panels) that should not be
+    treated as routing obstacles — edges between their children need to route
+    through the inter-row corridors inside them, not all the way around them.
+    """
+    container_ids: set[str] = set()
+    tolerance = 5.0
+    items = list(bounds_by_cell_id.items())
+    for c_id, c_bounds in items:
+        for v_id, v_bounds in items:
+            if v_id == c_id:
+                continue
+            if (
+                v_bounds.left >= c_bounds.left - tolerance
+                and v_bounds.right <= c_bounds.right + tolerance
+                and v_bounds.top >= c_bounds.top - tolerance
+                and v_bounds.bottom <= c_bounds.bottom + tolerance
+            ):
+                container_ids.add(c_id)
+                break
+    return container_ids
+
+
+def _normalize_drawio_panel_spacing(root: ElementTree.Element) -> bool:
+    """Redistribute child nodes within panel containers to ensure routing corridors.
+
+    Expands inter-row gaps to _PANEL_MIN_ROW_GAP (or _PANEL_MIN_NOTE_GAP for
+    short annotation cells), grows panel heights as needed, and shifts any
+    floating nodes below expanded panels downward to prevent overlap.
+
+    Nodes at the same y position are treated as a single side-by-side row and
+    are not separated from each other — only the gap between distinct rows is
+    expanded.
+    """
+    bounds = _drawio_vertex_bounds(root)
+    container_ids = _drawio_container_ids(bounds)
+    if not container_ids:
+        return False
+
+    tolerance = 5.0
+    y_deltas: dict[str, float] = {}
+    h_deltas: dict[str, float] = {}
+
+    for panel_id in sorted(container_ids, key=lambda cid: (bounds[cid].left, bounds[cid].top)):
+        pb = bounds[panel_id]
+
+        children: list[tuple[float, str]] = []
+        for cell_id, cb in bounds.items():
+            if cell_id == panel_id or cell_id in container_ids:
+                continue
+            if (
+                cb.left >= pb.left - tolerance
+                and cb.right <= pb.right + tolerance
+                and cb.top >= pb.top - tolerance
+                and cb.bottom <= pb.bottom + tolerance
+            ):
+                eff_top = cb.top + y_deltas.get(cell_id, 0.0)
+                children.append((eff_top, cell_id))
+
+        children.sort()
+        if not children:
+            continue
+
+        # Group children that are at the same y position into rows (side-by-side
+        # layout).  Only apply minimum row gaps between distinct rows.
+        rows: list[list[tuple[float, str]]] = []
+        for eff_top, cell_id in children:
+            if rows and abs(eff_top - rows[-1][0][0]) <= tolerance:
+                rows[-1].append((eff_top, cell_id))
+            else:
+                rows.append([(eff_top, cell_id)])
+
+        min_y = pb.top + _PANEL_MIN_HEADER_GAP
+        for i, row in enumerate(rows):
+            row_top = row[0][0]
+            row_bottom = max(
+                bounds[cell_id].top + y_deltas.get(cell_id, 0.0) + bounds[cell_id].height
+                for _, cell_id in row
+            )
+            new_row_top = max(row_top, min_y)
+            push = new_row_top - row_top
+            if push > 0.5:
+                for _, cell_id in row:
+                    y_deltas[cell_id] = y_deltas.get(cell_id, 0.0) + push
+                row_bottom += push
+
+            if i < len(rows) - 1:
+                next_row = rows[i + 1]
+                next_height = max(bounds[cell_id].height for _, cell_id in next_row)
+                min_gap = (
+                    _PANEL_MIN_ROW_GAP
+                    if next_height >= _PANEL_NOTE_HEIGHT_THRESHOLD
+                    else _PANEL_MIN_NOTE_GAP
+                )
+                min_y = row_bottom + min_gap
+
+        last_row = rows[-1]
+        new_last_bottom = max(
+            bounds[cell_id].top + y_deltas.get(cell_id, 0.0) + bounds[cell_id].height
+            for _, cell_id in last_row
+        )
+        new_panel_bottom = new_last_bottom + _PANEL_MIN_FOOTER_GAP
+        # Account for the panel's own y-shift from a prior panel's expansion.
+        panel_y_shift = y_deltas.get(panel_id, 0.0)
+        old_panel_bottom = pb.bottom + panel_y_shift + h_deltas.get(panel_id, 0.0)
+        h_expand = new_panel_bottom - old_panel_bottom
+
+        if h_expand > 0.5:
+            h_deltas[panel_id] = h_deltas.get(panel_id, 0.0) + h_expand
+            for cell_id, cb in bounds.items():
+                if cell_id in {c for row in rows for _, c in row} or cell_id == panel_id:
+                    continue
+                eff_top = cb.top + y_deltas.get(cell_id, 0.0)
+                if (
+                    eff_top >= old_panel_bottom - tolerance
+                    and cb.left < pb.right + tolerance
+                    and cb.right > pb.left - tolerance
+                ):
+                    y_deltas[cell_id] = y_deltas.get(cell_id, 0.0) + h_expand
+
+    if not y_deltas and not h_deltas:
+        return False
+
+    for cell in root.iter("mxCell"):
+        cell_id = cell.attrib.get("id")
+        geo = cell.find("mxGeometry")
+        if geo is None:
+            continue
+        if cell_id in y_deltas:
+            old_y = _parse_drawio_number(geo.attrib.get("y")) or 0.0
+            geo.set("y", _format_drawio_number(old_y + y_deltas[cell_id]))
+        if cell_id in h_deltas:
+            old_h = _parse_drawio_number(geo.attrib.get("height")) or 0.0
+            geo.set("height", _format_drawio_number(old_h + h_deltas[cell_id]))
+
+    return True
+
+
 def _build_drawio_edge_routes(
     root: ElementTree.Element,
     bounds_by_cell_id: dict[str, DrawioCellBounds],
@@ -1554,6 +1700,10 @@ def _build_drawio_edge_routes(
     # the same corridor segment and producing overlapping edges in the export.
     clearance = 24.0
     lane_gap = 18.0
+    # Exclude container cells (panel boxes) from routing obstacles so that
+    # edges can find corridors in the inter-row gaps inside panels rather than
+    # being forced all the way above or below the entire diagram.
+    container_ids = _drawio_container_ids(bounds_by_cell_id)
     # Track assigned corridor coordinates by axis (horizontal covers left+right,
     # vertical covers up+down) so that edges of opposite orientations that share
     # the same corridor plane do not collide.
@@ -1579,6 +1729,7 @@ def _build_drawio_edge_routes(
             (c - half_band, c + half_band)
             for c in axis_assigned_corridors[axis]
         ]
+        excluded = {source_id, target_id} | container_ids
 
         if orientation in {"down", "up"}:
             exit_x = (source_bounds.left + source_bounds.right) / 2
@@ -1591,7 +1742,7 @@ def _build_drawio_edge_routes(
                 span_end = target_bounds.bottom + clearance
             corridor = _select_drawio_vertical_corridor(
                 bounds_by_cell_id,
-                excluded_ids={source_id, target_id},
+                excluded_ids=excluded,
                 span_start=span_start,
                 span_end=span_end,
                 preferred_positions=(exit_x, entry_x, (exit_x + entry_x) / 2),
@@ -1612,7 +1763,7 @@ def _build_drawio_edge_routes(
                 span_end = target_bounds.right + clearance
             corridor = _select_drawio_horizontal_corridor(
                 bounds_by_cell_id,
-                excluded_ids={source_id, target_id},
+                excluded_ids=excluded,
                 span_start=span_start,
                 span_end=span_end,
                 preferred_positions=(exit_y, entry_y, (exit_y + entry_y) / 2),
