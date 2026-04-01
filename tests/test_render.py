@@ -418,6 +418,98 @@ class RenderTests(unittest.TestCase):
             self.assertIsNotNone(corridor_y)
             self.assertTrue(corridor_y < 260 or corridor_y > 360)
 
+    def test_run_render_steps_separates_corridors_across_lane_groups(self):
+        # Three edges from two independent source nodes route to three separate
+        # targets on the same side.  Because the sources and targets are
+        # separated by a blocker row, all three edges must go around via the
+        # same open corridor region.  The routing must assign each lane group a
+        # distinct corridor coordinate so the horizontal segments do not stack
+        # on top of each other.
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp) / "demo"
+            (repo_root / "docs" / "diagrams").mkdir(parents=True)
+            source = repo_root / "docs" / "diagrams" / "repo-architecture.drawio"
+            source.write_text(
+                """<?xml version="1.0" encoding="utf-8"?>
+<mxfile host="app.diagrams.net">
+  <diagram id="repo-architecture" name="Repo Architecture">
+    <mxGraphModel>
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <!-- Source nodes on the left -->
+        <mxCell id="s1" vertex="1" parent="1">
+          <mxGeometry x="40" y="200" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="s2" vertex="1" parent="1">
+          <mxGeometry x="40" y="320" width="160" height="80" as="geometry" />
+        </mxCell>
+        <!-- Blocker row in the middle that forces routing around -->
+        <mxCell id="blk" vertex="1" parent="1">
+          <mxGeometry x="260" y="140" width="160" height="320" as="geometry" />
+        </mxCell>
+        <!-- Target nodes on the right -->
+        <mxCell id="t1" vertex="1" parent="1">
+          <mxGeometry x="480" y="160" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="t2" vertex="1" parent="1">
+          <mxGeometry x="480" y="280" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="t3" vertex="1" parent="1">
+          <mxGeometry x="480" y="400" width="160" height="80" as="geometry" />
+        </mxCell>
+        <!-- Three edges from two lane groups all forced to route around blk -->
+        <mxCell id="e1" edge="1" parent="1" source="s1" target="t1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="s2" target="t2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="s2" target="t3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
+""",
+                encoding="utf-8",
+            )
+            tool_root = repo_root / "tool-home" / "tools" / "bin"
+            tool_root.mkdir(parents=True)
+            (tool_root / "drawio").write_text("#!/usr/bin/env bash\n")
+
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
+
+            def runner(command: list[str], cwd: str | None) -> None:
+                output = Path(command[command.index("-o") + 1])
+                output.write_text("<svg />\n" if output.suffix == ".svg" else "png\n")
+
+            run_render_steps(steps, runner=runner)
+
+            normalized = source.read_text(encoding="utf-8")
+            pts_e1 = self._edge_points(normalized, "e1")
+            pts_e2 = self._edge_points(normalized, "e2")
+            pts_e3 = self._edge_points(normalized, "e3")
+
+            def corridor_coord(pts: list[tuple[int, int]]) -> int | None:
+                for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+                    if y1 == y2:
+                        return y1
+                return None
+
+            c1 = corridor_coord(pts_e1)
+            c2 = corridor_coord(pts_e2)
+            c3 = corridor_coord(pts_e3)
+            self.assertIsNotNone(c1)
+            self.assertIsNotNone(c2)
+            self.assertIsNotNone(c3)
+            # All three edges must use distinct corridor y-coordinates so their
+            # horizontal segments do not overlap.
+            self.assertNotEqual(c1, c2, "e1 and e2 share the same corridor")
+            self.assertNotEqual(c1, c3, "e1 and e3 share the same corridor")
+            self.assertNotEqual(c2, c3, "e2 and e3 share the same corridor")
+
     def test_run_render_steps_renames_pyreverse_outputs_and_renders_generated_sources(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = Path(tmp) / "demo"
