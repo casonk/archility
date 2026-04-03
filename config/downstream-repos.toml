@@ -1,0 +1,35 @@
+# Known downstream repositories for archility.
+# Paths are relative to the portfolio root.
+# Archility is the portfolio-standard architecture toolchain, so this inventory
+# follows the current portfolio baseline rather than narrower repo-local
+# integration points.
+
+[utility_repo]
+path = "./util-repos/archility"
+
+[downstream_repos]
+tracking_basis = "portfolio architecture baseline"
+paths = [
+  "./doc-repos/Certifications",
+  "./doc-repos/casonk.github.io",
+  "./doc-repos/my-consent",
+  "./doc-repos/university-coursework",
+  "./drawio-templates",
+  "./health-repos/doseido",
+  "./personal-finance",
+  "./research-repos/citegres",
+  "./research-repos/pushshift_python",
+  "./research-repos/sonetsim",
+  "./research-repos/zillow-public-data",
+  "./util-repos/auto-pass",
+  "./util-repos/dyno-lab",
+  "./util-repos/fedora-debugg",
+  "./util-repos/intake",
+  "./util-repos/nordility",
+  "./util-repos/pit-box",
+  "./util-repos/shock-relay",
+  "./util-repos/short-circuit",
+  "./util-repos/snowbridge",
+  "./util-repos/terminility",
+  "./util-repos/traction-control",
+]
