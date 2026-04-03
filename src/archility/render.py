@@ -335,12 +335,18 @@ def find_drawio_sources(repo_path: str | Path) -> list[Path]:
     if not root.exists():
         return []
     return sorted(
-        (path for path in root.rglob("*") if path.is_file() and path.suffix.lower() in DRAWIO_SUFFIXES),
+        (
+            path
+            for path in root.rglob("*")
+            if path.is_file() and path.suffix.lower() in DRAWIO_SUFFIXES
+        ),
         key=str,
     )
 
 
-def build_render_steps(repo_path: str | Path, *, archility_root: Path | None = None) -> list[RenderStep]:
+def build_render_steps(
+    repo_path: str | Path, *, archility_root: Path | None = None
+) -> list[RenderStep]:
     repo_root = Path(repo_path).resolve()
     tool_root = (archility_root or package_repo_root()).resolve() / "tools" / "bin"
     plantuml_bin = str(tool_root / "plantuml")
@@ -365,7 +371,11 @@ def build_render_steps(repo_path: str | Path, *, archility_root: Path | None = N
                 python_plan.pyreverse_produced_stems,
                 strict=True,
             ):
-                steps.extend(_build_plantuml_render_steps(source, plantuml_bin, produced_stem=produced_stem))
+                steps.extend(
+                    _build_plantuml_render_steps(
+                        source, plantuml_bin, produced_stem=produced_stem
+                    )
+                )
         steps.extend(_build_pydeps_steps(python_plan, pydeps_bin))
     shell_plan = build_shell_diagram_plan(repo_root)
     if shell_plan is not None:
@@ -395,11 +405,14 @@ def ensure_tools_available(steps: list[RenderStep]) -> None:
     if missing:
         joined = "\n".join(f"- {path}" for path in missing)
         raise FileNotFoundError(
-            "Required archility tool wrappers are missing. Run archility/setup.sh first.\n" + joined
+            "Required archility tool wrappers are missing. Run archility/setup.sh first.\n"
+            + joined
         )
 
 
-def run_render_steps(steps: list[RenderStep], *, runner: RunCommand | None = None) -> None:
+def run_render_steps(
+    steps: list[RenderStep], *, runner: RunCommand | None = None
+) -> None:
     _normalize_drawio_sources(steps)
     ensure_tools_available(steps)
     execute = runner or _default_runner
@@ -408,7 +421,9 @@ def run_render_steps(steps: list[RenderStep], *, runner: RunCommand | None = Non
             step.internal_action()
         else:
             execute(step.command, step.cwd)
-        for produced_output, target_output in zip(step.produced_outputs, step.outputs, strict=True):
+        for produced_output, target_output in zip(
+            step.produced_outputs, step.outputs, strict=True
+        ):
             _ensure_step_output(step.source, Path(produced_output), Path(target_output))
         if step.tool == "pyreverse":
             _normalize_pyreverse_outputs(step)
@@ -441,7 +456,11 @@ def _build_plantuml_render_steps(
     produced_stem: str | None = None,
 ) -> list[RenderStep]:
     source_str = str(source)
-    produced_base = source.with_suffix("") if produced_stem is None else source.parent / produced_stem
+    produced_base = (
+        source.with_suffix("")
+        if produced_stem is None
+        else source.parent / produced_stem
+    )
     return [
         _single_output_step(
             tool="plantuml",
@@ -468,14 +487,32 @@ def _build_drawio_render_steps(source: Path, drawio_bin: str) -> list[RenderStep
             source=source_str,
             output=source_str + ".svg",
             produced_output=source_str + ".svg",
-            command=[drawio_bin, "--no-sandbox", "-x", "-f", "svg", "-o", source_str + ".svg", source_str],
+            command=[
+                drawio_bin,
+                "--no-sandbox",
+                "-x",
+                "-f",
+                "svg",
+                "-o",
+                source_str + ".svg",
+                source_str,
+            ],
         ),
         _single_output_step(
             tool="drawio",
             source=source_str,
             output=source_str + ".png",
             produced_output=source_str + ".png",
-            command=[drawio_bin, "--no-sandbox", "-x", "-f", "png", "-o", source_str + ".png", source_str],
+            command=[
+                drawio_bin,
+                "--no-sandbox",
+                "-x",
+                "-f",
+                "png",
+                "-o",
+                source_str + ".png",
+                source_str,
+            ],
         ),
     ]
 
@@ -509,12 +546,16 @@ def _build_pydeps_steps(plan: PythonDiagramPlan, pydeps_bin: str) -> list[Render
     return steps
 
 
-def _build_pyreverse_step(plan: PythonDiagramPlan, pyreverse_bin: str) -> RenderStep | None:
+def _build_pyreverse_step(
+    plan: PythonDiagramPlan, pyreverse_bin: str
+) -> RenderStep | None:
     if not plan.targets:
         return None
 
     project_name = plan.project_name
-    relative_targets = [str(target.relative_to(plan.repo_root)) for target in plan.targets]
+    relative_targets = [
+        str(target.relative_to(plan.repo_root)) for target in plan.targets
+    ]
     output_directory = str(diagram_root(plan.repo_root).relative_to(plan.repo_root))
     source_roots = sorted(
         {
@@ -522,7 +563,10 @@ def _build_pyreverse_step(plan: PythonDiagramPlan, pyreverse_bin: str) -> Render
             for target in plan.targets
         }
     )
-    produced_outputs = [diagram_root(plan.repo_root) / f"{stem}.puml" for stem in plan.pyreverse_produced_stems]
+    produced_outputs = [
+        diagram_root(plan.repo_root) / f"{stem}.puml"
+        for stem in plan.pyreverse_produced_stems
+    ]
 
     return RenderStep(
         tool="pyreverse",
@@ -545,8 +589,12 @@ def _build_pyreverse_step(plan: PythonDiagramPlan, pyreverse_bin: str) -> Render
     )
 
 
-def _build_shell_diagram_steps(plan: ShellDiagramPlan, plantuml_bin: str) -> list[RenderStep]:
-    relative_targets = ", ".join(str(path.relative_to(plan.repo_root)) for path in plan.targets)
+def _build_shell_diagram_steps(
+    plan: ShellDiagramPlan, plantuml_bin: str
+) -> list[RenderStep]:
+    relative_targets = ", ".join(
+        str(path.relative_to(plan.repo_root)) for path in plan.targets
+    )
     return _build_generated_plantuml_steps(
         tool="archility-shell",
         source=plan.source,
@@ -556,8 +604,12 @@ def _build_shell_diagram_steps(plan: ShellDiagramPlan, plantuml_bin: str) -> lis
     )
 
 
-def _build_database_diagram_steps(plan: DatabaseDiagramPlan, plantuml_bin: str) -> list[RenderStep]:
-    relative_targets = ", ".join(str(path.relative_to(plan.repo_root)) for path in plan.targets)
+def _build_database_diagram_steps(
+    plan: DatabaseDiagramPlan, plantuml_bin: str
+) -> list[RenderStep]:
+    relative_targets = ", ".join(
+        str(path.relative_to(plan.repo_root)) for path in plan.targets
+    )
     return _build_generated_plantuml_steps(
         tool="archility-database",
         source=plan.source,
@@ -567,8 +619,12 @@ def _build_database_diagram_steps(plan: DatabaseDiagramPlan, plantuml_bin: str) 
     )
 
 
-def _build_tooling_diagram_steps(plan: ToolingDiagramPlan, plantuml_bin: str) -> list[RenderStep]:
-    relative_targets = ", ".join(str(path.relative_to(plan.repo_root)) for path in plan.targets)
+def _build_tooling_diagram_steps(
+    plan: ToolingDiagramPlan, plantuml_bin: str
+) -> list[RenderStep]:
+    relative_targets = ", ".join(
+        str(path.relative_to(plan.repo_root)) for path in plan.targets
+    )
     return _build_generated_plantuml_steps(
         tool="archility-tooling",
         source=plan.source,
@@ -589,7 +645,9 @@ def _build_generated_plantuml_steps(
     def write_source() -> None:
         source.parent.mkdir(parents=True, exist_ok=True)
         text = generator()
-        source.write_text(text if text.endswith("\n") else text + "\n", encoding="utf-8")
+        source.write_text(
+            text if text.endswith("\n") else text + "\n", encoding="utf-8"
+        )
 
     return [
         RenderStep(
@@ -692,7 +750,9 @@ def _normalize_pyreverse_outputs(step: RenderStep) -> None:
             _normalize_pyreverse_class_source(
                 output,
                 module_info=module_info,
-                pydeps_outputs=tuple(python_plan.pydeps_outputs) if python_plan is not None else (),
+                pydeps_outputs=(
+                    tuple(python_plan.pydeps_outputs) if python_plan is not None else ()
+                ),
                 repo_root=repo_root,
             )
 
@@ -738,7 +798,9 @@ def _python_module_name(source_root: Path, path: Path) -> str:
     return ".".join(parts)
 
 
-def _python_module_aliases(repo_root: Path, target: Path, path: Path) -> tuple[str, ...]:
+def _python_module_aliases(
+    repo_root: Path, target: Path, path: Path
+) -> tuple[str, ...]:
     aliases: list[str] = []
     for source_root in (_pyreverse_source_root(target), repo_root):
         module_name = _python_module_name(source_root, path)
@@ -780,7 +842,9 @@ def _normalize_pyreverse_package_source(
         "skinparam componentStyle rectangle",
     ]
     for label, alias in nodes:
-        lines.append(f'rectangle "{_escape_plantuml_label(_python_package_summary_label(label, module_info))}" as {alias}')
+        lines.append(
+            f'rectangle "{_escape_plantuml_label(_python_package_summary_label(label, module_info))}" as {alias}'
+        )
     lines.extend(edges)
     lines.append("@enduml")
     source.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -810,10 +874,14 @@ def _normalize_pyreverse_class_source(
     normalized = text.rstrip()
     if normalized.endswith("@enduml"):
         normalized = normalized[: -len("@enduml")].rstrip()
-    source.write_text(normalized + "\n" + "\n".join(note_lines) + "\n@enduml\n", encoding="utf-8")
+    source.write_text(
+        normalized + "\n" + "\n".join(note_lines) + "\n@enduml\n", encoding="utf-8"
+    )
 
 
-def _parse_pyreverse_package_source(text: str) -> tuple[str, list[tuple[str, str]], list[str]]:
+def _parse_pyreverse_package_source(
+    text: str,
+) -> tuple[str, list[tuple[str, str]], list[str]]:
     startuml = "@startuml packages"
     nodes: list[tuple[str, str]] = []
     edges: list[str] = []
@@ -836,7 +904,9 @@ def _parse_pyreverse_package_source(text: str) -> tuple[str, list[tuple[str, str
     return (startuml, nodes, edges)
 
 
-def _python_package_summary_label(package_name: str, module_info: dict[str, PythonModuleInfo]) -> str:
+def _python_package_summary_label(
+    package_name: str, module_info: dict[str, PythonModuleInfo]
+) -> str:
     direct_children: list[PythonModuleInfo] = []
     prefix = f"{package_name}."
     for module_name, info in module_info.items():
@@ -863,7 +933,9 @@ def _python_package_summary_label(package_name: str, module_info: dict[str, Pyth
         summary_lines.append(
             f"{child_package_count} child pkg, {child_module_count} module{'s' if child_module_count != 1 else ''}"
         )
-    summary_lines.append(f"{package_modules} python file{'s' if package_modules != 1 else ''}")
+    summary_lines.append(
+        f"{package_modules} python file{'s' if package_modules != 1 else ''}"
+    )
     if child_names:
         summary_lines.append("examples: " + ", ".join(child_names))
     return "\n".join(summary_lines)
@@ -877,7 +949,9 @@ def _escape_plantuml_label(label: str) -> str:
     return label.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
-def _unique_python_module_info(module_info: dict[str, PythonModuleInfo]) -> list[PythonModuleInfo]:
+def _unique_python_module_info(
+    module_info: dict[str, PythonModuleInfo],
+) -> list[PythonModuleInfo]:
     unique_by_path: dict[Path, PythonModuleInfo] = {}
     for info in module_info.values():
         unique_by_path.setdefault(info.path, info)
@@ -919,7 +993,9 @@ def _build_shell_graph_text(plan: ShellDiagramPlan) -> str:
         "skinparam componentStyle rectangle",
         "skinparam linetype ortho",
     ]
-    for path, relative, local_count, tool_count in sorted(script_summaries, key=lambda item: item[1]):
+    for path, relative, local_count, tool_count in sorted(
+        script_summaries, key=lambda item: item[1]
+    ):
         label_lines = [
             relative,
             f"{local_count} local shell edge{'s' if local_count != 1 else ''}",
@@ -992,7 +1068,11 @@ def _build_database_graph_text(plan: DatabaseDiagramPlan) -> str:
                 "note as databaseSchemaSummary",
                 f"Scanned {len(plan.targets)} SQL file{'s' if len(plan.targets) != 1 else ''}.",
                 "No CREATE TABLE or REFERENCES patterns were detected.",
-                "Files: " + ", ".join(_relative_repo_path(plan.repo_root, path) for path in plan.targets[:5]),
+                "Files: "
+                + ", ".join(
+                    _relative_repo_path(plan.repo_root, path)
+                    for path in plan.targets[:5]
+                ),
                 "end note",
                 "@enduml",
             ]
@@ -1010,7 +1090,9 @@ def _build_database_graph_text(plan: DatabaseDiagramPlan) -> str:
     for source_table, target_table in sorted(relations):
         if source_table not in table_aliases or target_table not in table_aliases:
             continue
-        lines.append(f"{table_aliases[source_table]} --> {table_aliases[target_table]} : FK")
+        lines.append(
+            f"{table_aliases[source_table]} --> {table_aliases[target_table]} : FK"
+        )
     lines.extend(
         [
             "note as databaseSchemaSummary",
@@ -1050,7 +1132,9 @@ def _build_tooling_graph_text(plan: ToolingDiagramPlan) -> str:
         "skinparam componentStyle rectangle",
         "skinparam linetype ortho",
     ]
-    for path in sorted(plan.targets, key=lambda entry: _relative_repo_path(plan.repo_root, entry)):
+    for path in sorted(
+        plan.targets, key=lambda entry: _relative_repo_path(plan.repo_root, entry)
+    ):
         relative = _relative_repo_path(plan.repo_root, path)
         tools = source_tool_map[path]
         label_lines = [
@@ -1060,8 +1144,12 @@ def _build_tooling_graph_text(plan: ToolingDiagramPlan) -> str:
         label_text = _escape_plantuml_label("\n".join(label_lines))
         lines.append(f'rectangle "{label_text}" as {source_aliases[path]} #E0F2FE')
     for tool_name in sorted(all_tools):
-        lines.append(f'cloud "{_escape_plantuml_label(tool_name)}" as {tool_aliases[tool_name]} #FEF3C7')
-    for path in sorted(plan.targets, key=lambda entry: _relative_repo_path(plan.repo_root, entry)):
+        lines.append(
+            f'cloud "{_escape_plantuml_label(tool_name)}" as {tool_aliases[tool_name]} #FEF3C7'
+        )
+    for path in sorted(
+        plan.targets, key=lambda entry: _relative_repo_path(plan.repo_root, entry)
+    ):
         for tool_name in source_tool_map[path]:
             lines.append(f"{source_aliases[path]} --> {tool_aliases[tool_name]}")
     lines.extend(
@@ -1093,12 +1181,18 @@ def _analyze_shell_script(
         if Path(head).name in function_names:
             continue
         if head in {".", "source"}:
-            local_target = _resolve_local_shell_target(path, command_tokens[1] if len(command_tokens) > 1 else None, shell_targets)
+            local_target = _resolve_local_shell_target(
+                path,
+                command_tokens[1] if len(command_tokens) > 1 else None,
+                shell_targets,
+            )
             if local_target is not None:
                 local_calls.add((local_target, "source"))
             continue
         if Path(head).name in SHELL_INTERPRETERS and len(command_tokens) > 1:
-            local_target = _resolve_local_shell_target(path, command_tokens[1], shell_targets)
+            local_target = _resolve_local_shell_target(
+                path, command_tokens[1], shell_targets
+            )
             if local_target is not None:
                 local_calls.add((local_target, "exec"))
                 continue
@@ -1106,7 +1200,9 @@ def _analyze_shell_script(
         if local_target is not None:
             local_calls.add((local_target, "call"))
             continue
-        tool_name = _normalize_tool_command(command_tokens, repo_root=repo_root, current_path=path)
+        tool_name = _normalize_tool_command(
+            command_tokens, repo_root=repo_root, current_path=path
+        )
         if tool_name is not None and tool_name not in SHELL_INTERPRETERS:
             tools.add(tool_name)
     return (local_calls, tools)
@@ -1116,19 +1212,29 @@ def _extract_tools_from_tooling_source(repo_root: Path, path: Path) -> set[str]:
     relative = _relative_repo_path(repo_root, path)
     if relative.startswith(".github/workflows/"):
         return _extract_tools_from_workflow(path, repo_root)
-    if path.suffix.lower() in {".sh", ".bash", ".zsh", ".ksh"} or path.name == "setup.sh":
+    if (
+        path.suffix.lower() in {".sh", ".bash", ".zsh", ".ksh"}
+        or path.name == "setup.sh"
+    ):
         return _extract_tools_from_shell_script(path, repo_root)
     if path.name.startswith(("Dockerfile", "Containerfile")):
         tools = _extract_tools_from_dockerfile(path, repo_root)
         tools.add("docker")
         return tools
-    if path.name in {"compose.yml", "compose.yaml", "docker-compose.yml", "docker-compose.yaml"}:
+    if path.name in {
+        "compose.yml",
+        "compose.yaml",
+        "docker-compose.yml",
+        "docker-compose.yaml",
+    }:
         return {"docker compose"}
     if path.name in {"Makefile", "Justfile"} or path.name.startswith("Makefile."):
         return _extract_tools_from_makefile(path, repo_root)
     if path.name.startswith("Taskfile"):
         return _extract_tools_from_taskfile(path, repo_root)
-    return _extract_tools_from_command_text(path.read_text(encoding="utf-8", errors="ignore"), repo_root, path)
+    return _extract_tools_from_command_text(
+        path.read_text(encoding="utf-8", errors="ignore"), repo_root, path
+    )
 
 
 def _extract_tools_from_shell_script(path: Path, repo_root: Path) -> set[str]:
@@ -1141,7 +1247,9 @@ def _extract_tools_from_shell_script(path: Path, repo_root: Path) -> set[str]:
             continue
         if Path(command_tokens[0]).name in function_names:
             continue
-        tool_name = _normalize_tool_command(command_tokens, repo_root=repo_root, current_path=path)
+        tool_name = _normalize_tool_command(
+            command_tokens, repo_root=repo_root, current_path=path
+        )
         if tool_name is not None:
             tools.add(tool_name)
     return tools
@@ -1189,7 +1297,11 @@ def _extract_workflow_run_blocks(text: str) -> list[str]:
             candidate_indent = len(candidate) - len(candidate.lstrip(" "))
             if candidate_indent <= indent:
                 break
-            block_lines.append(candidate[indent + 2 :] if candidate_indent >= indent + 2 else candidate.lstrip())
+            block_lines.append(
+                candidate[indent + 2 :]
+                if candidate_indent >= indent + 2
+                else candidate.lstrip()
+            )
             index += 1
         blocks.append("\n".join(block_lines))
     return blocks
@@ -1204,7 +1316,11 @@ def _extract_tools_from_dockerfile(path: Path, repo_root: Path) -> set[str]:
         if current_run:
             current_run.append(stripped.removesuffix("\\").strip())
             if not stripped.endswith("\\"):
-                tools.update(_extract_tools_from_command_text(" ".join(current_run), repo_root, path))
+                tools.update(
+                    _extract_tools_from_command_text(
+                        " ".join(current_run), repo_root, path
+                    )
+                )
                 current_run = []
             continue
         if not stripped.upper().startswith("RUN "):
@@ -1212,7 +1328,9 @@ def _extract_tools_from_dockerfile(path: Path, repo_root: Path) -> set[str]:
         payload = stripped[4:].strip()
         current_run.append(payload.removesuffix("\\").strip())
         if not stripped.endswith("\\"):
-            tools.update(_extract_tools_from_command_text(" ".join(current_run), repo_root, path))
+            tools.update(
+                _extract_tools_from_command_text(" ".join(current_run), repo_root, path)
+            )
             current_run = []
     return tools
 
@@ -1239,11 +1357,15 @@ def _extract_tools_from_taskfile(path: Path, repo_root: Path) -> set[str]:
     return _extract_tools_from_command_text("\n".join(lines), repo_root, path)
 
 
-def _extract_tools_from_command_text(text: str, repo_root: Path, current_path: Path) -> set[str]:
+def _extract_tools_from_command_text(
+    text: str, repo_root: Path, current_path: Path
+) -> set[str]:
     tools: set[str] = set()
     for tokens in _iter_command_token_lists(text):
         command_tokens = _strip_command_wrappers(tokens)
-        tool_name = _normalize_tool_command(command_tokens, repo_root=repo_root, current_path=current_path)
+        tool_name = _normalize_tool_command(
+            command_tokens, repo_root=repo_root, current_path=current_path
+        )
         if tool_name is not None:
             tools.add(tool_name)
     return tools
@@ -1260,7 +1382,9 @@ def _iter_command_token_lists(text: str) -> list[list[str]]:
             continue
         if not line or line.startswith("#"):
             continue
-        if _looks_like_shell_function_definition(line) or _looks_like_shell_case_label(line):
+        if _looks_like_shell_function_definition(line) or _looks_like_shell_case_label(
+            line
+        ):
             continue
         heredoc_match = re.search(r"<<-?\s*['\"]?([A-Za-z0-9_]+)['\"]?", raw_line)
         for segment in re.split(r"\s*(?:&&|\|\||[|;])\s*", line):
@@ -1282,7 +1406,9 @@ def _collect_shell_function_names(text: str) -> set[str]:
     function_names: set[str] = set()
     for raw_line in text.splitlines():
         line = raw_line.strip()
-        match = re.match(r"^(?:function\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{?$", line)
+        match = re.match(
+            r"^(?:function\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{?$", line
+        )
         if match is not None:
             function_names.add(match.group(1))
             continue
@@ -1294,7 +1420,8 @@ def _collect_shell_function_names(text: str) -> set[str]:
 
 def _looks_like_shell_function_definition(line: str) -> bool:
     return (
-        re.match(r"^(?:function\s+)?[A-Za-z_][A-Za-z0-9_]*\s*\(\)\s*\{?$", line) is not None
+        re.match(r"^(?:function\s+)?[A-Za-z_][A-Za-z0-9_]*\s*\(\)\s*\{?$", line)
+        is not None
         or re.match(r"^function\s+[A-Za-z_][A-Za-z0-9_]*\s*\{?$", line) is not None
     )
 
@@ -1312,7 +1439,8 @@ def _strip_command_wrappers(tokens: list[str]) -> list[str]:
         if token_name == "env":
             index += 1
             while index < len(tokens) and (
-                tokens[index].startswith("-") or ENV_ASSIGNMENT_PATTERN.match(tokens[index])
+                tokens[index].startswith("-")
+                or ENV_ASSIGNMENT_PATTERN.match(tokens[index])
             ):
                 index += 1
             continue
@@ -1323,7 +1451,9 @@ def _strip_command_wrappers(tokens: list[str]) -> list[str]:
     return tokens[index:]
 
 
-def _resolve_local_shell_target(current_path: Path, token: str | None, shell_targets: set[Path]) -> Path | None:
+def _resolve_local_shell_target(
+    current_path: Path, token: str | None, shell_targets: set[Path]
+) -> Path | None:
     if token in {None, ""}:
         return None
     if any(marker in token for marker in ("$", "*", "{", "}", "(", ")")):
@@ -1335,7 +1465,9 @@ def _resolve_local_shell_target(current_path: Path, token: str | None, shell_tar
     else:
         candidates.append((current_path.parent / raw).resolve())
     if raw.suffix == "":
-        candidates.extend(candidate.with_suffix(".sh") for candidate in list(candidates))
+        candidates.extend(
+            candidate.with_suffix(".sh") for candidate in list(candidates)
+        )
     for candidate in candidates:
         if candidate in shell_targets:
             return candidate
@@ -1352,7 +1484,11 @@ def _normalize_tool_command(
         return None
     head = command_tokens[0]
     head_name = Path(head).name
-    if head in {".", "source"} or head_name in SHELL_CONTROL_KEYWORDS or head_name in SHELL_BUILTINS:
+    if (
+        head in {".", "source"}
+        or head_name in SHELL_CONTROL_KEYWORDS
+        or head_name in SHELL_BUILTINS
+    ):
         return None
     if (
         not head_name
@@ -1365,9 +1501,17 @@ def _normalize_tool_command(
         or not any(character.isalnum() for character in head_name)
     ):
         return None
-    if head_name.startswith("python") and len(command_tokens) > 2 and command_tokens[1] == "-m":
+    if (
+        head_name.startswith("python")
+        and len(command_tokens) > 2
+        and command_tokens[1] == "-m"
+    ):
         return command_tokens[2].split(".", 1)[0]
-    if head_name in {"docker", "podman"} and len(command_tokens) > 1 and command_tokens[1] == "compose":
+    if (
+        head_name in {"docker", "podman"}
+        and len(command_tokens) > 1
+        and command_tokens[1] == "compose"
+    ):
         return f"{head_name} compose"
     if head_name in SHELL_INTERPRETERS and len(command_tokens) > 1:
         resolved = _resolve_repo_relative_path(current_path, command_tokens[1])
@@ -1470,7 +1614,9 @@ def _normalize_drawio_source(source: Path) -> bool:
             cell.set("style", normalized_style)
             style_changed = True
 
-        route_changed = _apply_drawio_edge_route(cell, routing_plan.get(cell.attrib.get("id", "")))
+        route_changed = _apply_drawio_edge_route(
+            cell, routing_plan.get(cell.attrib.get("id", ""))
+        )
         changed = changed or style_changed or route_changed
 
     if not changed:
@@ -1501,10 +1647,12 @@ def _normalize_drawio_edge_style(style: str) -> str:
             ordered_keys.append(key)
         style_map[key] = value
 
-    return ";".join(
-        f"{key}={style_map[key]}" if style_map[key] else key
-        for key in ordered_keys
-    ) + ";"
+    return (
+        ";".join(
+            f"{key}={style_map[key]}" if style_map[key] else key for key in ordered_keys
+        )
+        + ";"
+    )
 
 
 def _drawio_vertex_bounds(root: ElementTree.Element) -> dict[str, DrawioCellBounds]:
@@ -1521,7 +1669,9 @@ def _drawio_vertex_bounds(root: ElementTree.Element) -> dict[str, DrawioCellBoun
         height = _parse_drawio_number(geometry.attrib.get("height"))
         if None in {x, y, width, height}:
             continue
-        bounds[cell.attrib["id"]] = DrawioCellBounds(x=x, y=y, width=width, height=height)
+        bounds[cell.attrib["id"]] = DrawioCellBounds(
+            x=x, y=y, width=width, height=height
+        )
     return bounds
 
 
@@ -1570,7 +1720,9 @@ def _normalize_drawio_panel_spacing(root: ElementTree.Element) -> bool:
     y_deltas: dict[str, float] = {}
     h_deltas: dict[str, float] = {}
 
-    for panel_id in sorted(container_ids, key=lambda cid: (bounds[cid].left, bounds[cid].top)):
+    for panel_id in sorted(
+        container_ids, key=lambda cid: (bounds[cid].left, bounds[cid].top)
+    ):
         pb = bounds[panel_id]
 
         children: list[tuple[float, str]] = []
@@ -1603,7 +1755,9 @@ def _normalize_drawio_panel_spacing(root: ElementTree.Element) -> bool:
         for i, row in enumerate(rows):
             row_top = row[0][0]
             row_bottom = max(
-                bounds[cell_id].top + y_deltas.get(cell_id, 0.0) + bounds[cell_id].height
+                bounds[cell_id].top
+                + y_deltas.get(cell_id, 0.0)
+                + bounds[cell_id].height
                 for _, cell_id in row
             )
             new_row_top = max(row_top, min_y)
@@ -1637,7 +1791,10 @@ def _normalize_drawio_panel_spacing(root: ElementTree.Element) -> bool:
         if h_expand > 0.5:
             h_deltas[panel_id] = h_deltas.get(panel_id, 0.0) + h_expand
             for cell_id, cb in bounds.items():
-                if cell_id in {c for row in rows for _, c in row} or cell_id == panel_id:
+                if (
+                    cell_id in {c for row in rows for _, c in row}
+                    or cell_id == panel_id
+                ):
                     continue
                 eff_top = cb.top + y_deltas.get(cell_id, 0.0)
                 if (
@@ -1697,8 +1854,12 @@ def _build_drawio_edge_routes(
         orientation = _drawio_edge_orientation(source_bounds, target_bounds)
         edges.append((edge_id, source_id, target_id, orientation))
         edge_src_tgt[edge_id] = (source_id, target_id)
-        source_groups.setdefault((source_id, _drawio_source_side(orientation)), []).append(edge_id)
-        target_groups.setdefault((target_id, _drawio_target_side(orientation)), []).append(edge_id)
+        source_groups.setdefault(
+            (source_id, _drawio_source_side(orientation)), []
+        ).append(edge_id)
+        target_groups.setdefault(
+            (target_id, _drawio_target_side(orientation)), []
+        ).append(edge_id)
         lane_groups.setdefault((orientation, target_id), []).append(edge_id)
 
     # Precompute one center corridor per lane group sequentially so that each
@@ -1731,8 +1892,7 @@ def _build_drawio_edge_routes(
         half_band = max(lane_count - 1, 0) / 2 * lane_gap + lane_gap * 1.5
         axis = "horizontal" if orientation in {"left", "right"} else "vertical"
         extra_blocked = [
-            (c - half_band, c + half_band)
-            for c in axis_assigned_corridors[axis]
+            (c - half_band, c + half_band) for c in axis_assigned_corridors[axis]
         ]
         # Use the union of all source/target spans in the group so that the
         # precomputed corridor is valid for every edge in the group, not only
@@ -1835,7 +1995,9 @@ def _apply_drawio_edge_route(
 
     geometry = cell.find("mxGeometry")
     if geometry is None:
-        geometry = ElementTree.SubElement(cell, "mxGeometry", {"relative": "1", "as": "geometry"})
+        geometry = ElementTree.SubElement(
+            cell, "mxGeometry", {"relative": "1", "as": "geometry"}
+        )
     geometry.attrib["relative"] = "1"
     geometry.attrib["as"] = "geometry"
     geometry.attrib["archilityManagedRoute"] = "1"
@@ -1894,7 +2056,9 @@ def _drawio_target_side(orientation: str) -> str:
     }[orientation]
 
 
-def _drawio_lane_group_key(orientation: str, target: DrawioCellBounds) -> tuple[str, int]:
+def _drawio_lane_group_key(
+    orientation: str, target: DrawioCellBounds
+) -> tuple[str, int]:
     if orientation in {"left", "right"}:
         return (orientation, round(target.mid_y))
     return (orientation, round(target.mid_x))
@@ -1919,12 +2083,18 @@ def _drawio_route_points(
     anchor_margin = 40.0
     clearance = 24.0
     lane_gap = 18.0
-    lane_offset = 0.0 if lane_count <= 1 else (lane_index - (lane_count - 1) / 2) * lane_gap
+    lane_offset = (
+        0.0 if lane_count <= 1 else (lane_index - (lane_count - 1) / 2) * lane_gap
+    )
 
     if orientation in {"down", "up"}:
-        exit_x = _spread_positions(source.left + anchor_margin, source.right - anchor_margin, source_count)[source_index]
+        exit_x = _spread_positions(
+            source.left + anchor_margin, source.right - anchor_margin, source_count
+        )[source_index]
         entry_x = _clamp_drawio_coordinate(
-            _spread_positions(target.left + anchor_margin, target.right - anchor_margin, target_count)[target_index],
+            _spread_positions(
+                target.left + anchor_margin, target.right - anchor_margin, target_count
+            )[target_index],
             lower=target.left + anchor_margin / 2,
             upper=target.right - anchor_margin / 2,
         )
@@ -1963,9 +2133,13 @@ def _drawio_route_points(
             ]
         )
 
-    exit_y = _spread_positions(source.top + anchor_margin, source.bottom - anchor_margin, source_count)[source_index]
+    exit_y = _spread_positions(
+        source.top + anchor_margin, source.bottom - anchor_margin, source_count
+    )[source_index]
     entry_y = _clamp_drawio_coordinate(
-        _spread_positions(target.top + anchor_margin, target.bottom - anchor_margin, target_count)[target_index],
+        _spread_positions(
+            target.top + anchor_margin, target.bottom - anchor_margin, target_count
+        )[target_index],
         lower=target.top + anchor_margin / 2,
         upper=target.bottom - anchor_margin / 2,
     )
@@ -2025,7 +2199,9 @@ def _select_drawio_horizontal_corridor(
     )
     if extra_blocked_intervals:
         blocked_intervals = blocked_intervals + extra_blocked_intervals
-    lower_bound, upper_bound = _drawio_routing_bounds(bounds_by_cell_id, axis="y", padding=padding)
+    lower_bound, upper_bound = _drawio_routing_bounds(
+        bounds_by_cell_id, axis="y", padding=padding
+    )
     return _select_drawio_corridor_coordinate(
         blocked_intervals,
         lower_bound=lower_bound,
@@ -2059,7 +2235,9 @@ def _select_drawio_vertical_corridor(
     )
     if extra_blocked_intervals:
         blocked_intervals = blocked_intervals + extra_blocked_intervals
-    lower_bound, upper_bound = _drawio_routing_bounds(bounds_by_cell_id, axis="x", padding=padding)
+    lower_bound, upper_bound = _drawio_routing_bounds(
+        bounds_by_cell_id, axis="x", padding=padding
+    )
     return _select_drawio_corridor_coordinate(
         blocked_intervals,
         lower_bound=lower_bound,
@@ -2141,7 +2319,9 @@ def _select_drawio_corridor_coordinate(
     lane_count: int,
     lane_gap: float,
 ) -> float:
-    open_intervals = _drawio_open_intervals(blocked_intervals, lower_bound=lower_bound, upper_bound=upper_bound)
+    open_intervals = _drawio_open_intervals(
+        blocked_intervals, lower_bound=lower_bound, upper_bound=upper_bound
+    )
     if not open_intervals:
         return preferred_positions[0]
 
@@ -2149,7 +2329,10 @@ def _select_drawio_corridor_coordinate(
     ranked_intervals = sorted(
         open_intervals,
         key=lambda interval: (
-            min(_drawio_interval_distance(interval, position) for position in preferred_positions),
+            min(
+                _drawio_interval_distance(interval, position)
+                for position in preferred_positions
+            ),
             abs(((interval[0] + interval[1]) / 2) - preferred_mean),
             -(interval[1] - interval[0]),
         ),
@@ -2216,11 +2399,18 @@ def _drawio_place_in_interval(
     base_position = min(
         preferred_positions,
         key=lambda position: (
-            abs(_clamp_drawio_coordinate(position, lower=usable_lower, upper=usable_upper) - position),
+            abs(
+                _clamp_drawio_coordinate(
+                    position, lower=usable_lower, upper=usable_upper
+                )
+                - position
+            ),
             abs(position - ((usable_lower + usable_upper) / 2)),
         ),
     )
-    lane_offset = 0.0 if lane_count <= 1 else (lane_index - (lane_count - 1) / 2) * lane_gap
+    lane_offset = (
+        0.0 if lane_count <= 1 else (lane_index - (lane_count - 1) / 2) * lane_gap
+    )
     return _clamp_drawio_coordinate(
         base_position + lane_offset,
         lower=usable_lower,
@@ -2228,7 +2418,9 @@ def _drawio_place_in_interval(
     )
 
 
-def _simplify_drawio_route(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+def _simplify_drawio_route(
+    points: list[tuple[float, float]],
+) -> list[tuple[float, float]]:
     simplified: list[tuple[float, float]] = []
     for point in points:
         if simplified and point == simplified[-1]:
@@ -2242,12 +2434,8 @@ def _simplify_drawio_route(points: list[tuple[float, float]]) -> list[tuple[floa
             continue
         prev_prev = collapsed[-2]
         prev = collapsed[-1]
-        if (
-            abs(prev_prev[0] - prev[0]) < 1e-9
-            and abs(prev[0] - point[0]) < 1e-9
-        ) or (
-            abs(prev_prev[1] - prev[1]) < 1e-9
-            and abs(prev[1] - point[1]) < 1e-9
+        if (abs(prev_prev[0] - prev[0]) < 1e-9 and abs(prev[0] - point[0]) < 1e-9) or (
+            abs(prev_prev[1] - prev[1]) < 1e-9 and abs(prev[1] - point[1]) < 1e-9
         ):
             collapsed[-1] = point
             continue

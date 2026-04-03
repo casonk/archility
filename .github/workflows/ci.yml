@@ -35,6 +35,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
           pip install git+https://github.com/casonk/dyno-lab.git
+          pip install black ruff
+      - name: Check formatting (ruff format)
+        run: ruff format --check .
+      # TODO: remove black once ruff format is confirmed stable portfolio-wide
+      - name: Check formatting (black — deprecated)
+        run: black --check --diff .
       - name: Check setup script syntax
         run: bash -n setup.sh
       - name: Run tests
