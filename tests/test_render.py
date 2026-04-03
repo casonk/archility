@@ -61,9 +61,7 @@ class RenderTests(unittest.TestCase):
                     "-f",
                     "svg",
                     "-o",
-                    str(
-                        repo_root / "docs" / "diagrams" / "repo-architecture.drawio.svg"
-                    ),
+                    str(repo_root / "docs" / "diagrams" / "repo-architecture.drawio.svg"),
                     str(repo_root / "docs" / "diagrams" / "repo-architecture.drawio"),
                 ],
             )
@@ -85,9 +83,7 @@ class RenderTests(unittest.TestCase):
             (repo_root / "pyproject.toml").write_text('[project]\nname = "demo-repo"\n')
             (repo_root / "src" / "demo").mkdir(parents=True)
             (repo_root / "src" / "demo" / "__init__.py").write_text("")
-            (repo_root / "src" / "demo" / "core.py").write_text(
-                "from . import __init__\n"
-            )
+            (repo_root / "src" / "demo" / "core.py").write_text("from . import __init__\n")
 
             steps = build_render_steps(repo_root, archility_root=Path("/tool-home"))
 
@@ -158,9 +154,7 @@ class RenderTests(unittest.TestCase):
             )
             self.assertEqual(
                 steps[-1].output,
-                str(
-                    repo_root / "docs" / "diagrams" / "python-import-deps-src-demo.svg"
-                ),
+                str(repo_root / "docs" / "diagrams" / "python-import-deps-src-demo.svg"),
             )
 
     def test_build_render_steps_for_multiple_python_modules_adds_package_diagram(self):
@@ -225,9 +219,7 @@ class RenderTests(unittest.TestCase):
             repo_root = Path(tmp) / "demo-repo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             (repo_root / "scripts").mkdir()
-            (repo_root / "scripts" / "common.sh").write_text(
-                "#!/usr/bin/env bash\necho common\n"
-            )
+            (repo_root / "scripts" / "common.sh").write_text("#!/usr/bin/env bash\necho common\n")
             (repo_root / "scripts" / "deploy.sh").write_text(
                 "#!/usr/bin/env bash\nsource ./common.sh\ncurl https://example.com\n"
             )
@@ -318,42 +310,28 @@ class RenderTests(unittest.TestCase):
             (tool_root / "plantuml").write_text("#!/usr/bin/env bash\n")
             (tool_root / "drawio").write_text("#!/usr/bin/env bash\n")
 
-            steps = build_render_steps(
-                repo_root, archility_root=repo_root / "tool-home"
-            )
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
 
             def runner(command: list[str], cwd: str | None) -> None:
                 if "-tsvg" in command:
-                    (
-                        repo_root / "docs" / "diagrams" / "repo-architecture.svg"
-                    ).write_text("<svg />")
+                    (repo_root / "docs" / "diagrams" / "repo-architecture.svg").write_text(
+                        "<svg />"
+                    )
                 elif "-tpng" in command:
-                    (
-                        repo_root / "docs" / "diagrams" / "repo-architecture.png"
-                    ).write_text("png\n")
+                    (repo_root / "docs" / "diagrams" / "repo-architecture.png").write_text("png\n")
 
             run_render_steps(steps[:2], runner=runner)
 
             self.assertTrue(
-                (
-                    repo_root / "docs" / "diagrams" / "repo-architecture.puml.svg"
-                ).exists()
+                (repo_root / "docs" / "diagrams" / "repo-architecture.puml.svg").exists()
             )
             self.assertTrue(
-                (
-                    repo_root / "docs" / "diagrams" / "repo-architecture.puml.png"
-                ).exists()
+                (repo_root / "docs" / "diagrams" / "repo-architecture.puml.png").exists()
             )
-            self.assertFalse(
-                (repo_root / "docs" / "diagrams" / "repo-architecture.svg").exists()
-            )
-            self.assertFalse(
-                (repo_root / "docs" / "diagrams" / "repo-architecture.png").exists()
-            )
+            self.assertFalse((repo_root / "docs" / "diagrams" / "repo-architecture.svg").exists())
+            self.assertFalse((repo_root / "docs" / "diagrams" / "repo-architecture.png").exists())
             self.assertEqual(
-                (
-                    repo_root / "docs" / "diagrams" / "repo-architecture.puml.svg"
-                ).read_bytes(),
+                (repo_root / "docs" / "diagrams" / "repo-architecture.puml.svg").read_bytes(),
                 b"<svg />\n",
             )
 
@@ -396,9 +374,7 @@ class RenderTests(unittest.TestCase):
             tool_root.mkdir(parents=True)
             (tool_root / "drawio").write_text("#!/usr/bin/env bash\n")
 
-            steps = build_render_steps(
-                repo_root, archility_root=repo_root / "tool-home"
-            )
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
 
             def runner(command: list[str], cwd: str | None) -> None:
                 output = Path(command[command.index("-o") + 1])
@@ -416,19 +392,13 @@ class RenderTests(unittest.TestCase):
             self.assertNotEqual(edge_500, edge_501)
             self.assertNotEqual(edge_500[1][1], edge_501[1][1])
             self.assertTrue(
-                (
-                    repo_root / "docs" / "diagrams" / "repo-architecture.drawio.svg"
-                ).exists()
+                (repo_root / "docs" / "diagrams" / "repo-architecture.drawio.svg").exists()
             )
             self.assertTrue(
-                (
-                    repo_root / "docs" / "diagrams" / "repo-architecture.drawio.png"
-                ).exists()
+                (repo_root / "docs" / "diagrams" / "repo-architecture.drawio.png").exists()
             )
             self.assertEqual(
-                (
-                    repo_root / "docs" / "diagrams" / "repo-architecture.drawio.svg"
-                ).read_bytes(),
+                (repo_root / "docs" / "diagrams" / "repo-architecture.drawio.svg").read_bytes(),
                 b"<svg />\n",
             )
 
@@ -471,9 +441,7 @@ class RenderTests(unittest.TestCase):
             tool_root.mkdir(parents=True)
             (tool_root / "drawio").write_text("#!/usr/bin/env bash\n")
 
-            steps = build_render_steps(
-                repo_root, archility_root=repo_root / "tool-home"
-            )
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
 
             def runner(command: list[str], cwd: str | None) -> None:
                 output = Path(command[command.index("-o") + 1])
@@ -487,7 +455,7 @@ class RenderTests(unittest.TestCase):
             corridor_y = next(
                 (
                     first[1]
-                    for first, second in zip(edge_500, edge_500[1:])
+                    for first, second in zip(edge_500, edge_500[1:], strict=False)
                     if first[1] == second[1]
                 ),
                 None,
@@ -556,9 +524,7 @@ class RenderTests(unittest.TestCase):
             tool_root.mkdir(parents=True)
             (tool_root / "drawio").write_text("#!/usr/bin/env bash\n")
 
-            steps = build_render_steps(
-                repo_root, archility_root=repo_root / "tool-home"
-            )
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
 
             def runner(command: list[str], cwd: str | None) -> None:
                 output = Path(command[command.index("-o") + 1])
@@ -572,7 +538,7 @@ class RenderTests(unittest.TestCase):
             pts_e3 = self._edge_points(normalized, "e3")
 
             def corridor_coord(pts: list[tuple[int, int]]) -> int | None:
-                for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+                for (_x1, y1), (_x2, y2) in zip(pts, pts[1:], strict=False):
                     if y1 == y2:
                         return y1
                 return None
@@ -639,9 +605,7 @@ class RenderTests(unittest.TestCase):
             tool_root.mkdir(parents=True)
             (tool_root / "drawio").write_text("#!/usr/bin/env bash\n")
 
-            steps = build_render_steps(
-                repo_root, archility_root=repo_root / "tool-home"
-            )
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
 
             def runner(command: list[str], cwd: str | None) -> None:
                 output = Path(command[command.index("-o") + 1])
@@ -671,20 +635,16 @@ class RenderTests(unittest.TestCase):
             corridor_y = next(
                 (
                     first[1]
-                    for first, second in zip(pts_e1, pts_e1[1:])
+                    for first, second in zip(pts_e1, pts_e1[1:], strict=False)
                     if first[1] == second[1]
                 ),
                 None,
             )
-            self.assertIsNotNone(
-                corridor_y, "edge e1 must have a horizontal corridor segment"
-            )
+            self.assertIsNotNone(corridor_y, "edge e1 must have a horizontal corridor segment")
             panel_top = 140
             panel_bottom = float(
                 document.find(".//mxCell[@id='panel_a']/mxGeometry").attrib["y"]
-            ) + float(
-                document.find(".//mxCell[@id='panel_a']/mxGeometry").attrib["height"]
-            )
+            ) + float(document.find(".//mxCell[@id='panel_a']/mxGeometry").attrib["height"])
             self.assertGreater(
                 corridor_y,
                 panel_top - 50,
@@ -705,17 +665,13 @@ class RenderTests(unittest.TestCase):
             (repo_root / "pyproject.toml").write_text('[project]\nname = "demo"\n')
             (repo_root / "src" / "demo").mkdir(parents=True)
             (repo_root / "src" / "demo" / "__init__.py").write_text("")
-            (repo_root / "src" / "demo" / "core.py").write_text(
-                "class Demo:\n    pass\n"
-            )
+            (repo_root / "src" / "demo" / "core.py").write_text("class Demo:\n    pass\n")
             tool_root = repo_root / "tool-home" / "tools" / "bin"
             tool_root.mkdir(parents=True)
             for tool_name in ("plantuml", "pydeps", "pyreverse"):
                 (tool_root / tool_name).write_text("#!/usr/bin/env bash\n")
 
-            steps = build_render_steps(
-                repo_root, archility_root=repo_root / "tool-home"
-            )
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
 
             def runner(command: list[str], cwd: str | None) -> None:
                 if command[0].endswith("pyreverse"):
@@ -727,69 +683,42 @@ class RenderTests(unittest.TestCase):
                     )
                 elif command[0].endswith("pydeps"):
                     (
-                        repo_root
-                        / "docs"
-                        / "diagrams"
-                        / "python-import-deps-src-demo.svg"
+                        repo_root / "docs" / "diagrams" / "python-import-deps-src-demo.svg"
                     ).write_text("<svg />\n")
                 elif "-tsvg" in command:
                     source_name = Path(command[-1]).name
                     if source_name == "python-classes.puml":
-                        (
-                            repo_root / "docs" / "diagrams" / "classes_demo.svg"
-                        ).write_text("<svg />\n")
-                    elif source_name == "python-packages.puml":
-                        (
-                            repo_root / "docs" / "diagrams" / "packages_demo.svg"
-                        ).write_text("<svg />\n")
-                    else:
-                        Path(command[-1].replace(".puml", ".svg")).write_text(
+                        (repo_root / "docs" / "diagrams" / "classes_demo.svg").write_text(
                             "<svg />\n"
                         )
+                    elif source_name == "python-packages.puml":
+                        (repo_root / "docs" / "diagrams" / "packages_demo.svg").write_text(
+                            "<svg />\n"
+                        )
+                    else:
+                        Path(command[-1].replace(".puml", ".svg")).write_text("<svg />\n")
                 elif "-tpng" in command:
                     source_name = Path(command[-1]).name
                     if source_name == "python-classes.puml":
-                        (
-                            repo_root / "docs" / "diagrams" / "classes_demo.png"
-                        ).write_text("png\n")
+                        (repo_root / "docs" / "diagrams" / "classes_demo.png").write_text("png\n")
                     elif source_name == "python-packages.puml":
-                        (
-                            repo_root / "docs" / "diagrams" / "packages_demo.png"
-                        ).write_text("png\n")
+                        (repo_root / "docs" / "diagrams" / "packages_demo.png").write_text("png\n")
                     else:
                         Path(command[-1].replace(".puml", ".png")).write_text("png\n")
 
             run_render_steps(steps, runner=runner)
 
+            self.assertTrue((repo_root / "docs" / "diagrams" / "python-classes.puml").exists())
+            self.assertTrue((repo_root / "docs" / "diagrams" / "python-packages.puml").exists())
+            self.assertTrue((repo_root / "docs" / "diagrams" / "python-classes.puml.svg").exists())
+            self.assertTrue((repo_root / "docs" / "diagrams" / "python-classes.puml.png").exists())
+            self.assertTrue((repo_root / "docs" / "diagrams" / "python-packages.puml.svg").exists())
+            self.assertTrue((repo_root / "docs" / "diagrams" / "python-packages.puml.png").exists())
             self.assertTrue(
-                (repo_root / "docs" / "diagrams" / "python-classes.puml").exists()
+                (repo_root / "docs" / "diagrams" / "python-import-deps-src-demo.svg").exists()
             )
-            self.assertTrue(
-                (repo_root / "docs" / "diagrams" / "python-packages.puml").exists()
-            )
-            self.assertTrue(
-                (repo_root / "docs" / "diagrams" / "python-classes.puml.svg").exists()
-            )
-            self.assertTrue(
-                (repo_root / "docs" / "diagrams" / "python-classes.puml.png").exists()
-            )
-            self.assertTrue(
-                (repo_root / "docs" / "diagrams" / "python-packages.puml.svg").exists()
-            )
-            self.assertTrue(
-                (repo_root / "docs" / "diagrams" / "python-packages.puml.png").exists()
-            )
-            self.assertTrue(
-                (
-                    repo_root / "docs" / "diagrams" / "python-import-deps-src-demo.svg"
-                ).exists()
-            )
-            self.assertFalse(
-                (repo_root / "docs" / "diagrams" / "classes_demo.puml").exists()
-            )
-            self.assertFalse(
-                (repo_root / "docs" / "diagrams" / "packages_demo.puml").exists()
-            )
+            self.assertFalse((repo_root / "docs" / "diagrams" / "classes_demo.puml").exists())
+            self.assertFalse((repo_root / "docs" / "diagrams" / "packages_demo.puml").exists())
 
     def test_run_render_steps_adds_low_signal_note_for_python_classes(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -804,9 +733,7 @@ class RenderTests(unittest.TestCase):
             for tool_name in ("plantuml", "pydeps", "pyreverse"):
                 (tool_root / tool_name).write_text("#!/usr/bin/env bash\n")
 
-            steps = build_render_steps(
-                repo_root, archility_root=repo_root / "tool-home"
-            )
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
 
             def runner(command: list[str], cwd: str | None) -> None:
                 if command[0].endswith("pyreverse"):
@@ -814,26 +741,19 @@ class RenderTests(unittest.TestCase):
                         '@startuml classes_demo\nclass "refresh.RefreshJob" as refresh.RefreshJob\n@enduml\n'
                     )
                 elif command[0].endswith("pydeps"):
-                    (
-                        repo_root
-                        / "docs"
-                        / "diagrams"
-                        / "python-import-deps-refresh.svg"
-                    ).write_text("<svg />\n")
-                elif "-tsvg" in command:
-                    (repo_root / "docs" / "diagrams" / "classes_demo.svg").write_text(
+                    (repo_root / "docs" / "diagrams" / "python-import-deps-refresh.svg").write_text(
                         "<svg />\n"
                     )
+                elif "-tsvg" in command:
+                    (repo_root / "docs" / "diagrams" / "classes_demo.svg").write_text("<svg />\n")
                 elif "-tpng" in command:
-                    (repo_root / "docs" / "diagrams" / "classes_demo.png").write_text(
-                        "png\n"
-                    )
+                    (repo_root / "docs" / "diagrams" / "classes_demo.png").write_text("png\n")
 
             run_render_steps(steps, runner=runner)
 
-            normalized = (
-                repo_root / "docs" / "diagrams" / "python-classes.puml"
-            ).read_text(encoding="utf-8")
+            normalized = (repo_root / "docs" / "diagrams" / "python-classes.puml").read_text(
+                encoding="utf-8"
+            )
             self.assertIn("Minimal class surface detected.", normalized)
             self.assertIn("Scanned 1 Python module.", normalized)
             self.assertIn("python-import-deps-refresh.svg", normalized)
@@ -845,18 +765,14 @@ class RenderTests(unittest.TestCase):
             (repo_root / "pyproject.toml").write_text('[project]\nname = "demo"\n')
             (repo_root / "src" / "demo").mkdir(parents=True)
             (repo_root / "src" / "demo" / "__init__.py").write_text("")
-            (repo_root / "src" / "demo" / "cli.py").write_text(
-                "def main() -> None:\n    pass\n"
-            )
+            (repo_root / "src" / "demo" / "cli.py").write_text("def main() -> None:\n    pass\n")
             (repo_root / "src" / "demo" / "core.py").write_text("VALUE = 1\n")
             tool_root = repo_root / "tool-home" / "tools" / "bin"
             tool_root.mkdir(parents=True)
             for tool_name in ("plantuml", "pydeps", "pyreverse"):
                 (tool_root / tool_name).write_text("#!/usr/bin/env bash\n")
 
-            steps = build_render_steps(
-                repo_root, archility_root=repo_root / "tool-home"
-            )
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
 
             def runner(command: list[str], cwd: str | None) -> None:
                 if command[0].endswith("pyreverse"):
@@ -877,44 +793,35 @@ class RenderTests(unittest.TestCase):
                     )
                 elif command[0].endswith("pydeps"):
                     (
-                        repo_root
-                        / "docs"
-                        / "diagrams"
-                        / "python-import-deps-src-demo.svg"
+                        repo_root / "docs" / "diagrams" / "python-import-deps-src-demo.svg"
                     ).write_text("<svg />\n")
                 elif "-tsvg" in command:
                     source_name = Path(command[-1]).name
                     if source_name == "python-classes.puml":
-                        (
-                            repo_root / "docs" / "diagrams" / "classes_demo.svg"
-                        ).write_text("<svg />\n")
+                        (repo_root / "docs" / "diagrams" / "classes_demo.svg").write_text(
+                            "<svg />\n"
+                        )
                     else:
-                        (
-                            repo_root / "docs" / "diagrams" / "packages_demo.svg"
-                        ).write_text("<svg />\n")
+                        (repo_root / "docs" / "diagrams" / "packages_demo.svg").write_text(
+                            "<svg />\n"
+                        )
                 elif "-tpng" in command:
                     source_name = Path(command[-1]).name
                     if source_name == "python-classes.puml":
-                        (
-                            repo_root / "docs" / "diagrams" / "classes_demo.png"
-                        ).write_text("png\n")
+                        (repo_root / "docs" / "diagrams" / "classes_demo.png").write_text("png\n")
                     else:
-                        (
-                            repo_root / "docs" / "diagrams" / "packages_demo.png"
-                        ).write_text("png\n")
+                        (repo_root / "docs" / "diagrams" / "packages_demo.png").write_text("png\n")
 
             run_render_steps(steps, runner=runner)
 
-            normalized = (
-                repo_root / "docs" / "diagrams" / "python-packages.puml"
-            ).read_text(encoding="utf-8")
+            normalized = (repo_root / "docs" / "diagrams" / "python-packages.puml").read_text(
+                encoding="utf-8"
+            )
             self.assertIn(
                 'rectangle "demo\\n0 child pkg, 2 modules\\n3 python files\\nexamples: cli, core" as demo',
                 normalized,
             )
-            self.assertIn(
-                'rectangle "demo.cli\\n1 python file" as demo.cli', normalized
-            )
+            self.assertIn('rectangle "demo.cli\\n1 python file" as demo.cli', normalized)
             self.assertNotIn('package "demo" as demo {', normalized)
 
     def test_run_render_steps_rewrites_package_diagram_for_mixed_source_roots(self):
@@ -926,17 +833,13 @@ class RenderTests(unittest.TestCase):
             (repo_root / "scripts" / "extract_education.py").write_text(
                 "def extract() -> None:\n    pass\n"
             )
-            (repo_root / "talkmap.py").write_text(
-                "def build_map() -> None:\n    pass\n"
-            )
+            (repo_root / "talkmap.py").write_text("def build_map() -> None:\n    pass\n")
             tool_root = repo_root / "tool-home" / "tools" / "bin"
             tool_root.mkdir(parents=True)
             for tool_name in ("plantuml", "pydeps", "pyreverse"):
                 (tool_root / tool_name).write_text("#!/usr/bin/env bash\n")
 
-            steps = build_render_steps(
-                repo_root, archility_root=repo_root / "tool-home"
-            )
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
 
             def runner(command: list[str], cwd: str | None) -> None:
                 if command[0].endswith("pyreverse"):
@@ -957,29 +860,25 @@ class RenderTests(unittest.TestCase):
                 elif "-tsvg" in command:
                     source_name = Path(command[-1]).name
                     if source_name == "python-classes.puml":
-                        (
-                            repo_root / "docs" / "diagrams" / "classes_demo.svg"
-                        ).write_text("<svg />\n")
+                        (repo_root / "docs" / "diagrams" / "classes_demo.svg").write_text(
+                            "<svg />\n"
+                        )
                     else:
-                        (
-                            repo_root / "docs" / "diagrams" / "packages_demo.svg"
-                        ).write_text("<svg />\n")
+                        (repo_root / "docs" / "diagrams" / "packages_demo.svg").write_text(
+                            "<svg />\n"
+                        )
                 elif "-tpng" in command:
                     source_name = Path(command[-1]).name
                     if source_name == "python-classes.puml":
-                        (
-                            repo_root / "docs" / "diagrams" / "classes_demo.png"
-                        ).write_text("png\n")
+                        (repo_root / "docs" / "diagrams" / "classes_demo.png").write_text("png\n")
                     else:
-                        (
-                            repo_root / "docs" / "diagrams" / "packages_demo.png"
-                        ).write_text("png\n")
+                        (repo_root / "docs" / "diagrams" / "packages_demo.png").write_text("png\n")
 
             run_render_steps(steps, runner=runner)
 
-            normalized = (
-                repo_root / "docs" / "diagrams" / "python-packages.puml"
-            ).read_text(encoding="utf-8")
+            normalized = (repo_root / "docs" / "diagrams" / "python-packages.puml").read_text(
+                encoding="utf-8"
+            )
             self.assertIn(
                 'rectangle "scripts.extract_education\\n1 python file" as scripts.extract_education',
                 normalized,
@@ -991,9 +890,7 @@ class RenderTests(unittest.TestCase):
             repo_root = Path(tmp) / "demo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             (repo_root / "scripts").mkdir()
-            (repo_root / "scripts" / "common.sh").write_text(
-                "#!/usr/bin/env bash\necho common\n"
-            )
+            (repo_root / "scripts" / "common.sh").write_text("#!/usr/bin/env bash\necho common\n")
             (repo_root / "scripts" / "deploy.sh").write_text(
                 "#!/usr/bin/env bash\nsource ./common.sh\ncurl https://example.com\n"
             )
@@ -1011,9 +908,7 @@ class RenderTests(unittest.TestCase):
             tool_root.mkdir(parents=True)
             (tool_root / "plantuml").write_text("#!/usr/bin/env bash\n")
 
-            steps = build_render_steps(
-                repo_root, archility_root=repo_root / "tool-home"
-            )
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
 
             def runner(command: list[str], cwd: str | None) -> None:
                 output = (
@@ -1025,12 +920,12 @@ class RenderTests(unittest.TestCase):
 
             run_render_steps(steps, runner=runner)
 
-            shell_source = (
-                repo_root / "docs" / "diagrams" / "shell-call-graph.puml"
-            ).read_text(encoding="utf-8")
-            database_source = (
-                repo_root / "docs" / "diagrams" / "database-schema.puml"
-            ).read_text(encoding="utf-8")
+            shell_source = (repo_root / "docs" / "diagrams" / "shell-call-graph.puml").read_text(
+                encoding="utf-8"
+            )
+            database_source = (repo_root / "docs" / "diagrams" / "database-schema.puml").read_text(
+                encoding="utf-8"
+            )
             tooling_source = (
                 repo_root / "docs" / "diagrams" / "tooling-integrations.puml"
             ).read_text(encoding="utf-8")
@@ -1046,13 +941,9 @@ class RenderTests(unittest.TestCase):
             self.assertTrue(
                 (repo_root / "docs" / "diagrams" / "shell-call-graph.puml.svg").exists()
             )
+            self.assertTrue((repo_root / "docs" / "diagrams" / "database-schema.puml.png").exists())
             self.assertTrue(
-                (repo_root / "docs" / "diagrams" / "database-schema.puml.png").exists()
-            )
-            self.assertTrue(
-                (
-                    repo_root / "docs" / "diagrams" / "tooling-integrations.puml.svg"
-                ).exists()
+                (repo_root / "docs" / "diagrams" / "tooling-integrations.puml.svg").exists()
             )
 
 

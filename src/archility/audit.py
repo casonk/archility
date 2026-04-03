@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 import os
-from pathlib import Path
 import re
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
 CODE_MARKER_FILES = (
     "pyproject.toml",
@@ -147,9 +147,7 @@ def _has_python_descendants(path: Path) -> bool:
             continue
         if child.is_file() and child.suffix == ".py":
             return True
-        if child.is_dir() and (
-            _is_python_package(child) or _has_python_descendants(child)
-        ):
+        if child.is_dir() and (_is_python_package(child) or _has_python_descendants(child)):
             return True
     return False
 
@@ -280,15 +278,11 @@ def detect_diagram_formats(diagram_files: list[Path]) -> list[str]:
 
 
 def count_source_diagrams(diagram_files: list[Path]) -> int:
-    return sum(
-        1 for path in diagram_files if path.suffix.lower() in SOURCE_DIAGRAM_SUFFIXES
-    )
+    return sum(1 for path in diagram_files if path.suffix.lower() in SOURCE_DIAGRAM_SUFFIXES)
 
 
 def count_render_artifacts(diagram_files: list[Path]) -> int:
-    return sum(
-        1 for path in diagram_files if path.suffix.lower() in RENDER_ARTIFACT_SUFFIXES
-    )
+    return sum(1 for path in diagram_files if path.suffix.lower() in RENDER_ARTIFACT_SUFFIXES)
 
 
 def iter_toolchain_hint_files(root: Path) -> list[Path]:
@@ -422,12 +416,10 @@ def format_text_report(results: list[RepoAudit]) -> str:
             + (", ".join(result.diagram_formats) if result.diagram_formats else "none")
         )
         lines.append(
-            "  toolchains: "
-            + (", ".join(result.toolchains) if result.toolchains else "none")
+            "  toolchains: " + (", ".join(result.toolchains) if result.toolchains else "none")
         )
         lines.append(
-            "  source_roots: "
-            + (", ".join(result.source_roots) if result.source_roots else "none")
+            "  source_roots: " + (", ".join(result.source_roots) if result.source_roots else "none")
         )
         if result.recommendations:
             lines.append("  recommendations:")

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from typing import Sequence
+from collections.abc import Sequence
 
 from .audit import audit_repositories, format_text_report
 from .generate import format_generate_report, generate_repositories
