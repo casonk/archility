@@ -97,7 +97,9 @@ def top_level_content_dirs(root: Path) -> list[Path]:
     return [
         path
         for path in sorted(root.iterdir(), key=lambda entry: entry.name)
-        if path.is_dir() and path.name not in EXCLUDED_TOP_LEVEL_DIRS and not path.name.startswith(".")
+        if path.is_dir()
+        and path.name not in EXCLUDED_TOP_LEVEL_DIRS
+        and not path.name.startswith(".")
     ]
 
 
@@ -145,7 +147,9 @@ def blueprint_structure_lines(repo_root: Path) -> list[str]:
         "",
     ]
     for prefix, courses in course_groups.items():
-        lines.append(f"### `{prefix}/` — {len(courses)} {_course_directory_label(len(courses))}")
+        lines.append(
+            f"### `{prefix}/` — {len(courses)} {_course_directory_label(len(courses))}"
+        )
         lines.append("")
         for course_name in courses:
             lines.append(f"- `{course_name}/`")
@@ -163,7 +167,9 @@ def blueprint_structure_lines(repo_root: Path) -> list[str]:
 def _course_taxonomy_summary(course_groups: dict[str, list[str]]) -> str:
     total_courses = sum(len(courses) for courses in course_groups.values())
     subject_area_label = "subject area" if len(course_groups) == 1 else "subject areas"
-    course_directory_label = "course directory" if total_courses == 1 else "course directories"
+    course_directory_label = (
+        "course directory" if total_courses == 1 else "course directories"
+    )
     return f"Course Taxonomy\\n{len(course_groups)} {subject_area_label} / {total_courses} {course_directory_label}"
 
 
@@ -176,12 +182,16 @@ def _course_directory_label(count: int) -> str:
     return "course directory" if count == 1 else "course directories"
 
 
-def relative_archility_path(repo_root: Path, *, archility_root: Path | None = None) -> str:
+def relative_archility_path(
+    repo_root: Path, *, archility_root: Path | None = None
+) -> str:
     tool_root = (archility_root or package_repo_root()).resolve()
     return os.path.relpath(tool_root, repo_root)
 
 
-def relative_repo_from_archility(repo_root: Path, *, archility_root: Path | None = None) -> str:
+def relative_repo_from_archility(
+    repo_root: Path, *, archility_root: Path | None = None
+) -> str:
     tool_root = (archility_root or package_repo_root()).resolve()
     return os.path.relpath(repo_root, tool_root)
 
@@ -216,7 +226,10 @@ def build_blueprint_text(repo_root: Path, *, archility_root: Path | None = None)
     contributor_notes = [
         "- Treat this file and the paired `docs/diagrams/` sources as the default architecture handoff surface.",
     ]
-    if any(plan is not None for plan in (python_plan, shell_plan, database_plan, tooling_plan)):
+    if any(
+        plan is not None
+        for plan in (python_plan, shell_plan, database_plan, tooling_plan)
+    ):
         contributor_notes.append(
             "- Treat the supplemental deterministic introspection diagrams as additive sidecars. "
             "They do not replace the repo-authored architecture blueprint or the paired repo-architecture sources."
@@ -324,7 +337,11 @@ def build_plantuml_text(repo_root: Path) -> str:
     repo_name = repo_root.name
     focus_roots = detect_focus_roots(repo_root)
     course_groups = detect_course_taxonomy(repo_root)
-    workflow_label = ".github/workflows/" if (repo_root / ".github" / "workflows").exists() else "workflow coverage not added yet"
+    workflow_label = (
+        ".github/workflows/"
+        if (repo_root / ".github" / "workflows").exists()
+        else "workflow coverage not added yet"
+    )
     nested_patterns_text = _deliverable_families_text("\n")
     lines = [
         "@startuml",
@@ -336,7 +353,7 @@ def build_plantuml_text(repo_root: Path) -> str:
         "skinparam packageStyle rectangle",
         "skinparam linetype ortho",
         "",
-        'actor Contributor as contributor',
+        "actor Contributor as contributor",
         'rectangle "README.md\\nAGENTS.md\\nLESSONSLEARNED.md" as governance #E2E8F0',
         'rectangle "docs/contributor-architecture-blueprint.md" as blueprint #DBEAFE',
         'rectangle "docs/diagrams/repo-architecture.puml" as plantuml_source #FCE7F3',
@@ -353,9 +370,13 @@ def build_plantuml_text(repo_root: Path) -> str:
             ]
         )
         for prefix, courses in course_groups.items():
-            lines.append(f'  package "{prefix} ({len(courses)} {"course" if len(courses) == 1 else "courses"})" #EEF7FF {{')
+            lines.append(
+                f'  package "{prefix} ({len(courses)} {"course" if len(courses) == 1 else "courses"})" #EEF7FF {{'
+            )
             for index, course_name in enumerate(courses, start=1):
-                lines.append(f'    folder "{course_name}/" as {prefix.lower()}_{index} #FFFFFF')
+                lines.append(
+                    f'    folder "{course_name}/" as {prefix.lower()}_{index} #FFFFFF'
+                )
             lines.append("  }")
         lines.extend(
             [
@@ -398,7 +419,7 @@ def build_plantuml_text(repo_root: Path) -> str:
 def _drawio_header_cell(repo_name: str) -> str:
     return (
         '        <mxCell id="2" value="'
-        + escape(f"{repo_name} Architecture Starter", {"\"": "&quot;"})
+        + escape(f"{repo_name} Architecture Starter", {'"': "&quot;"})
         + '&#10;(generated by archility)" '
         + 'style="rounded=0;whiteSpace=wrap;html=0;fillColor=#1F2937;strokeColor=#111827;fontColor=#FFFFFF;fontSize=26;fontStyle=1;align=center;verticalAlign=middle;spacing=10;" vertex="1" parent="1">\n'
         + '          <mxGeometry x="40" y="20" width="1520" height="80" as="geometry" />\n'
@@ -410,7 +431,9 @@ def _drawio_value(text: str) -> str:
     return escape(text, {'"': "&quot;"}).replace("\n", "&#10;")
 
 
-def _drawio_vertex(cell_id: int, value: str, style: str, x: int, y: int, width: int, height: int) -> str:
+def _drawio_vertex(
+    cell_id: int, value: str, style: str, x: int, y: int, width: int, height: int
+) -> str:
     return "\n".join(
         [
             f'        <mxCell id="{cell_id}" value="{_drawio_value(value)}" style="{style}" vertex="1" parent="1">',
@@ -439,7 +462,13 @@ def _drawio_geometry_lines(points: list[tuple[int, int]] | None) -> list[str]:
     return lines
 
 
-def _drawio_edge(cell_id: int, source: int, target: int, *, points: list[tuple[int, int]] | None = None) -> str:
+def _drawio_edge(
+    cell_id: int,
+    source: int,
+    target: int,
+    *,
+    points: list[tuple[int, int]] | None = None,
+) -> str:
     return "\n".join(
         [
             f'        <mxCell id="{cell_id}" style="rounded=0;html=0;strokeColor=#1F2937;edgeStyle=orthogonalEdgeStyle;orthogonalLoop=1;jettySize=12;endArrow=classic;endFill=1;endSize=10;strokeWidth=2;jumpStyle=arc;jumpSize=10;" edge="1" parent="1" source="{source}" target="{target}">',
@@ -514,7 +543,11 @@ def build_drawio_text(repo_root: Path) -> str:
     repo_name = repo_root.name
     focus_roots = detect_focus_roots(repo_root)
     course_groups = detect_course_taxonomy(repo_root)
-    workflow_label = ".github/workflows/" if (repo_root / ".github" / "workflows").exists() else "workflow coverage not added yet"
+    workflow_label = (
+        ".github/workflows/"
+        if (repo_root / ".github" / "workflows").exists()
+        else "workflow coverage not added yet"
+    )
     bounds_by_cell_id = {
         10: DrawioBounds(80, 150, 240, 90),
         20: DrawioBounds(380, 150, 300, 120),
@@ -572,7 +605,11 @@ def build_drawio_text(repo_root: Path) -> str:
         ),
     ]
 
-    edges = [_drawio_edge(500, 10, 20), _drawio_edge(501, 20, 30), _drawio_edge(502, 30, 40)]
+    edges = [
+        _drawio_edge(500, 10, 20),
+        _drawio_edge(501, 20, 30),
+        _drawio_edge(502, 30, 40),
+    ]
     page_height = 1200
 
     if course_groups is not None:
@@ -638,7 +675,9 @@ def build_drawio_text(repo_root: Path) -> str:
         for index, (_, courses) in enumerate(group_items):
             row = index // columns
             line_count = 2 + len(courses)
-            row_heights[row] = max(row_heights.get(row, 0), max(150, 50 + line_count * 18))
+            row_heights[row] = max(
+                row_heights.get(row, 0), max(150, 50 + line_count * 18)
+            )
 
         row_offsets: dict[int, int] = {}
         next_row_y = y_base
@@ -657,7 +696,13 @@ def build_drawio_text(repo_root: Path) -> str:
                 box_width,
                 max(150, 50 + (2 + len(courses)) * 18),
             )
-            value = "\n".join([f"Subject Area", f'{prefix} ({len(courses)} {"course" if len(courses) == 1 else "courses"})', *courses])
+            value = "\n".join(
+                [
+                    f"Subject Area",
+                    f"{prefix} ({len(courses)} {'course' if len(courses) == 1 else 'courses'})",
+                    *courses,
+                ]
+            )
             cells.append(
                 _drawio_vertex(
                     cell_id,
@@ -677,7 +722,9 @@ def build_drawio_text(repo_root: Path) -> str:
             lane_clearance=34,
             lane_gap=14,
         )
-        for index, (cell_id, route) in enumerate(zip(subject_area_ids, subject_area_routes)):
+        for index, (cell_id, route) in enumerate(
+            zip(subject_area_ids, subject_area_routes)
+        ):
             edges.append(_drawio_edge(520 + index, 60, cell_id, points=route))
         page_height = next_row_y + 80
     else:
@@ -718,9 +765,13 @@ def build_drawio_text(repo_root: Path) -> str:
             lane_clearance=26,
             lane_gap=18,
         )
-        for offset, (root_id, route) in enumerate(zip(root_ids, diagram_source_routes), start=1):
+        for offset, (root_id, route) in enumerate(
+            zip(root_ids, diagram_source_routes), start=1
+        ):
             edges.append(_drawio_edge(510 + offset, 40, root_id, points=route))
-        for offset, (root_id, route) in enumerate(zip(root_ids, automation_routes), start=1):
+        for offset, (root_id, route) in enumerate(
+            zip(root_ids, automation_routes), start=1
+        ):
             edges.append(_drawio_edge(520 + offset, 50, root_id, points=route))
 
     xml_lines = [
@@ -771,7 +822,9 @@ def generate_repo(
     skipped: list[str] = []
 
     file_builders = {
-        "blueprint": lambda: build_blueprint_text(repo_root, archility_root=archility_root),
+        "blueprint": lambda: build_blueprint_text(
+            repo_root, archility_root=archility_root
+        ),
         "plantuml": lambda: build_plantuml_text(repo_root),
         "drawio": lambda: build_drawio_text(repo_root),
     }
