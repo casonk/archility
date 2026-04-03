@@ -24,18 +24,12 @@ class AuditTests(unittest.TestCase):
             (root / "pyproject.toml").write_text('[project]\nname = "demo"\n')
             (root / "src").mkdir()
             (root / "docs" / "diagrams").mkdir(parents=True)
-            (root / "docs" / "contributor-architecture-blueprint.md").write_text(
-                "blueprint\n"
-            )
+            (root / "docs" / "contributor-architecture-blueprint.md").write_text("blueprint\n")
             (root / "docs" / "diagrams" / "repo-architecture.puml").write_text(
                 "@startuml\n@enduml\n"
             )
-            (root / "docs" / "diagrams" / "repo-architecture.drawio").write_text(
-                "<mxfile />\n"
-            )
-            (root / "docs" / "diagrams" / "repo-architecture.puml.svg").write_text(
-                "<svg />\n"
-            )
+            (root / "docs" / "diagrams" / "repo-architecture.drawio").write_text("<mxfile />\n")
+            (root / "docs" / "diagrams" / "repo-architecture.puml.svg").write_text("<svg />\n")
             (root / "README.md").write_text("Open in draw.io or diagrams.net.\n")
             (root / "setup.sh").write_text(
                 "inkscape repo-architecture.drawio.svg --export-type=png\n"
@@ -81,9 +75,7 @@ class AuditTests(unittest.TestCase):
             (root / "AGENTS.md").write_text("agents\n")
             (root / "LESSONSLEARNED.md").write_text("lessons\n")
             (root / "docs" / "diagrams").mkdir(parents=True)
-            (root / "docs" / "diagrams" / "repo-architecture.svg").write_text(
-                "<svg />\n"
-            )
+            (root / "docs" / "diagrams" / "repo-architecture.svg").write_text("<svg />\n")
 
             result = audit_repo(root)
 
@@ -117,9 +109,7 @@ class AuditTests(unittest.TestCase):
             (root / "src" / "demo" / "core.py").write_text("VALUE = 1\n")
             (root / "tests").mkdir()
             (root / "tests" / "__init__.py").write_text("")
-            (root / "tests" / "test_demo.py").write_text(
-                "def test_value() -> None:\n    pass\n"
-            )
+            (root / "tests" / "test_demo.py").write_text("def test_value() -> None:\n    pass\n")
 
             targets = collect_python_diagram_targets(root)
 

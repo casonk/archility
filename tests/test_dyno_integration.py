@@ -67,9 +67,7 @@ class GenerateTempWorkdirTests(unittest.TestCase):
             tmp.mkdir("my-project/src")
             repo_root = tmp.path / "my-project"
 
-            result = generate_repo(
-                repo_root, archility_root=tmp.path / "util-repos" / "archility"
-            )
+            result = generate_repo(repo_root, archility_root=tmp.path / "util-repos" / "archility")
 
         self.assertEqual(len(result.created), 3)
         self.assertIn("docs/contributor-architecture-blueprint.md", result.created)
@@ -90,9 +88,7 @@ class GenerateTempWorkdirTests(unittest.TestCase):
             )
             repo_root = tmp.path / "my-project"
 
-            result = generate_repo(
-                repo_root, archility_root=tmp.path / "util-repos" / "archility"
-            )
+            result = generate_repo(repo_root, archility_root=tmp.path / "util-repos" / "archility")
 
         self.assertNotIn("docs/contributor-architecture-blueprint.md", result.created)
         self.assertNotIn("docs/diagrams/repo-architecture.puml", result.created)
@@ -185,9 +181,7 @@ class FormatRenderPlanTests(unittest.TestCase):
     def test_format_plan_lists_puml_step(self):
         with TempWorkdir() as tmp:
             tmp.mkdir("demo/docs/diagrams")
-            tmp.write(
-                "demo/docs/diagrams/repo-architecture.puml", "@startuml\n@enduml\n"
-            )
+            tmp.write("demo/docs/diagrams/repo-architecture.puml", "@startuml\n@enduml\n")
             repo_root = tmp.path / "demo"
             archility_root = tmp.path / "archility"
 
