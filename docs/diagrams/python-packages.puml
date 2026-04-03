@@ -2,20 +2,21 @@
 set namespaceSeparator none
 top to bottom direction
 skinparam componentStyle rectangle
-rectangle "archility\n0 child pkg, 5 modules\n6 python files\nexamples: __main__, audit, cli" as archility
-rectangle "archility.__main__\n1 python file" as archility.__main__
-rectangle "archility.audit\n1 python file" as archility.audit
-rectangle "archility.cli\n1 python file" as archility.cli
-rectangle "archility.generate\n1 python file" as archility.generate
-rectangle "archility.render\n1 python file" as archility.render
-archility --> archility.audit
-archility --> archility.generate
-archility --> archility.render
-archility.__main__ --> archility.cli
-archility.cli --> archility.audit
-archility.cli --> archility.generate
-archility.cli --> archility.render
-archility.generate --> archility.audit
-archility.generate --> archility.render
-archility.render --> archility.audit
+rectangle "conftest\n1 python file" as conftest
+rectangle "src.archility\n0 child pkg, 5 modules\n6 python files\nexamples: __main__, audit, cli" as src.archility
+rectangle "src.archility.__main__\n1 python file" as src.archility.__main__
+rectangle "src.archility.audit\n1 python file" as src.archility.audit
+rectangle "src.archility.cli\n1 python file" as src.archility.cli
+rectangle "src.archility.generate\n1 python file" as src.archility.generate
+rectangle "src.archility.render\n1 python file" as src.archility.render
+src.archility --> src.archility.audit
+src.archility --> src.archility.generate
+src.archility --> src.archility.render
+src.archility.__main__ --> src.archility.cli
+src.archility.cli --> src.archility.audit
+src.archility.cli --> src.archility.generate
+src.archility.cli --> src.archility.render
+src.archility.generate --> src.archility.audit
+src.archility.generate --> src.archility.render
+src.archility.render --> src.archility.audit
 @enduml
