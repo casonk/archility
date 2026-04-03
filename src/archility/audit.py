@@ -118,7 +118,8 @@ def _iter_repo_files(root: Path, *, excluded_dirs: set[str]) -> list[Path]:
         dirnames[:] = sorted(
             dir_name
             for dir_name in dirnames
-            if dir_name not in excluded_dirs and not (dir_name.startswith(".") and dir_name != ".github")
+            if dir_name not in excluded_dirs
+            and not (dir_name.startswith(".") and dir_name != ".github")
         )
         for filename in sorted(filenames):
             if filename.startswith(".") and filename != ".env":
@@ -146,7 +147,9 @@ def _has_python_descendants(path: Path) -> bool:
             continue
         if child.is_file() and child.suffix == ".py":
             return True
-        if child.is_dir() and (_is_python_package(child) or _has_python_descendants(child)):
+        if child.is_dir() and (
+            _is_python_package(child) or _has_python_descendants(child)
+        ):
             return True
     return False
 
@@ -242,7 +245,9 @@ def collect_tooling_diagram_targets(root: Path) -> list[Path]:
     for path in _iter_repo_files(root, excluded_dirs=COMMON_EXCLUDED_DIRS):
         if path.resolve() in seen:
             continue
-        if path.name in TOOLING_ENTRYPOINT_FILENAMES or path.name.startswith(TOOLING_ENTRYPOINT_PREFIXES):
+        if path.name in TOOLING_ENTRYPOINT_FILENAMES or path.name.startswith(
+            TOOLING_ENTRYPOINT_PREFIXES
+        ):
             resolved = path.resolve()
             seen.add(resolved)
             targets.append(resolved)
@@ -250,20 +255,20 @@ def collect_tooling_diagram_targets(root: Path) -> list[Path]:
 
 
 def count_workflows(root: Path) -> int:
-    workflow_dir = root / '.github' / 'workflows'
+    workflow_dir = root / ".github" / "workflows"
     if not workflow_dir.exists():
         return 0
     return sum(1 for path in workflow_dir.iterdir() if path.is_file())
 
 
 def collect_diagram_files(root: Path) -> list[Path]:
-    docs_dir = root / 'docs'
+    docs_dir = root / "docs"
     if not docs_dir.exists():
         return []
     return sorted(
         (
             path
-            for path in docs_dir.rglob('*')
+            for path in docs_dir.rglob("*")
             if path.is_file() and path.suffix.lower() in DIAGRAM_SUFFIXES
         ),
         key=lambda path: str(path.relative_to(root)),
@@ -275,16 +280,20 @@ def detect_diagram_formats(diagram_files: list[Path]) -> list[str]:
 
 
 def count_source_diagrams(diagram_files: list[Path]) -> int:
-    return sum(1 for path in diagram_files if path.suffix.lower() in SOURCE_DIAGRAM_SUFFIXES)
+    return sum(
+        1 for path in diagram_files if path.suffix.lower() in SOURCE_DIAGRAM_SUFFIXES
+    )
 
 
 def count_render_artifacts(diagram_files: list[Path]) -> int:
-    return sum(1 for path in diagram_files if path.suffix.lower() in RENDER_ARTIFACT_SUFFIXES)
+    return sum(
+        1 for path in diagram_files if path.suffix.lower() in RENDER_ARTIFACT_SUFFIXES
+    )
 
 
 def iter_toolchain_hint_files(root: Path) -> list[Path]:
     hint_files = [root / relative_path for relative_path in TOOLCHAIN_HINT_FILES]
-    workflow_dir = root / '.github' / 'workflows'
+    workflow_dir = root / ".github" / "workflows"
     if workflow_dir.exists():
         hint_files.extend(path for path in workflow_dir.iterdir() if path.is_file())
     return [path for path in hint_files if path.is_file()]
@@ -292,9 +301,9 @@ def iter_toolchain_hint_files(root: Path) -> list[Path]:
 
 def read_search_text(path: Path) -> str:
     try:
-        return path.read_text(encoding='utf-8').lower()
+        return path.read_text(encoding="utf-8").lower()
     except UnicodeDecodeError:
-        return path.read_text(encoding='utf-8', errors='ignore').lower()
+        return path.read_text(encoding="utf-8", errors="ignore").lower()
 
 
 def detect_toolchains(root: Path, diagram_files: list[Path]) -> list[str]:
@@ -325,22 +334,24 @@ def build_recommendations(
 ) -> list[str]:
     recommendations: list[str] = []
     if not has_agents:
-        recommendations.append('Add AGENTS.md with repo-specific operating guidance.')
+        recommendations.append("Add AGENTS.md with repo-specific operating guidance.")
     if not has_lessons:
-        recommendations.append('Add repo-root LESSONSLEARNED.md for durable lessons.')
+        recommendations.append("Add repo-root LESSONSLEARNED.md for durable lessons.")
     if code_like and not has_blueprint:
         recommendations.append(
-            'Add docs/contributor-architecture-blueprint.md for contributor-facing architecture context.'
+            "Add docs/contributor-architecture-blueprint.md for contributor-facing architecture context."
         )
     if code_like and workflow_count == 0:
-        recommendations.append('Add at least one .github/workflows/ check for code-focused validation.')
+        recommendations.append(
+            "Add at least one .github/workflows/ check for code-focused validation."
+        )
     if code_like and diagram_count == 0:
         recommendations.append(
-            'Consider adding docs/diagrams/ artifacts for non-trivial flows. The current portfolio pattern uses PlantUML (.puml) and/or Draw.io (.drawio) sources plus rendered PNG/SVG artifacts.'
+            "Consider adding docs/diagrams/ artifacts for non-trivial flows. The current portfolio pattern uses PlantUML (.puml) and/or Draw.io (.drawio) sources plus rendered PNG/SVG artifacts."
         )
     if diagram_count > 0 and not toolchains:
         recommendations.append(
-            'Document the local architecture-diagram toolchain in README.md or docs/contributor-architecture-blueprint.md so contributors can regenerate the artifacts.'
+            "Document the local architecture-diagram toolchain in README.md or docs/contributor-architecture-blueprint.md so contributors can regenerate the artifacts."
         )
     return recommendations
 
@@ -348,14 +359,14 @@ def build_recommendations(
 def audit_repo(path: str | Path) -> RepoAudit:
     root = Path(path).resolve()
     if not root.exists():
-        raise FileNotFoundError(f'Repository path does not exist: {root}')
+        raise FileNotFoundError(f"Repository path does not exist: {root}")
     if not root.is_dir():
-        raise NotADirectoryError(f'Repository path is not a directory: {root}')
+        raise NotADirectoryError(f"Repository path is not a directory: {root}")
 
     code_like = detect_code_like(root)
-    has_agents = (root / 'AGENTS.md').is_file()
-    has_lessons = (root / 'LESSONSLEARNED.md').is_file()
-    has_blueprint = (root / 'docs' / 'contributor-architecture-blueprint.md').is_file()
+    has_agents = (root / "AGENTS.md").is_file()
+    has_lessons = (root / "LESSONSLEARNED.md").is_file()
+    has_blueprint = (root / "docs" / "contributor-architecture-blueprint.md").is_file()
     workflow_count = count_workflows(root)
     diagram_files = collect_diagram_files(root)
     diagram_count = len(diagram_files)
@@ -397,27 +408,31 @@ def audit_repositories(paths: list[str | Path]) -> list[RepoAudit]:
 def format_text_report(results: list[RepoAudit]) -> str:
     lines: list[str] = []
     for result in results:
-        lines.append(f'repo: {result.path}')
-        lines.append(f'  code_like: {"yes" if result.code_like else "no"}')
-        lines.append(f'  agents: {"yes" if result.has_agents else "no"}')
-        lines.append(f'  lessons: {"yes" if result.has_lessons else "no"}')
-        lines.append(f'  blueprint: {"yes" if result.has_blueprint else "no"}')
-        lines.append(f'  workflows: {result.workflow_count}')
-        lines.append(f'  diagrams: {result.diagram_count}')
-        lines.append(f'  diagram_sources: {result.diagram_source_count}')
-        lines.append(f'  diagram_renders: {result.render_artifact_count}')
+        lines.append(f"repo: {result.path}")
+        lines.append(f"  code_like: {'yes' if result.code_like else 'no'}")
+        lines.append(f"  agents: {'yes' if result.has_agents else 'no'}")
+        lines.append(f"  lessons: {'yes' if result.has_lessons else 'no'}")
+        lines.append(f"  blueprint: {'yes' if result.has_blueprint else 'no'}")
+        lines.append(f"  workflows: {result.workflow_count}")
+        lines.append(f"  diagrams: {result.diagram_count}")
+        lines.append(f"  diagram_sources: {result.diagram_source_count}")
+        lines.append(f"  diagram_renders: {result.render_artifact_count}")
         lines.append(
-            '  diagram_formats: '
-            + (', '.join(result.diagram_formats) if result.diagram_formats else 'none')
+            "  diagram_formats: "
+            + (", ".join(result.diagram_formats) if result.diagram_formats else "none")
         )
-        lines.append('  toolchains: ' + (', '.join(result.toolchains) if result.toolchains else 'none'))
         lines.append(
-            '  source_roots: ' + (', '.join(result.source_roots) if result.source_roots else 'none')
+            "  toolchains: "
+            + (", ".join(result.toolchains) if result.toolchains else "none")
+        )
+        lines.append(
+            "  source_roots: "
+            + (", ".join(result.source_roots) if result.source_roots else "none")
         )
         if result.recommendations:
-            lines.append('  recommendations:')
+            lines.append("  recommendations:")
             for recommendation in result.recommendations:
-                lines.append(f'    - {recommendation}')
+                lines.append(f"    - {recommendation}")
         else:
-            lines.append('  recommendations: none')
-    return '\n'.join(lines)
+            lines.append("  recommendations: none")
+    return "\n".join(lines)

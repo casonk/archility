@@ -13,70 +13,70 @@ from .render import build_render_steps, format_render_plan, run_render_steps
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog='archility',
+        prog="archility",
         description=(
-            'Audit repositories for architecture artifacts, generate deterministic starter diagrams, '
-            'and render both programmatic and agent-authored architecture sources.'
+            "Audit repositories for architecture artifacts, generate deterministic starter diagrams, "
+            "and render both programmatic and agent-authored architecture sources."
         ),
     )
-    subparsers = parser.add_subparsers(dest='command', required=True)
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
     audit_parser = subparsers.add_parser(
-        'audit',
-        help='Audit one or more repositories for architecture-related baseline artifacts.',
+        "audit",
+        help="Audit one or more repositories for architecture-related baseline artifacts.",
     )
     audit_parser.add_argument(
-        'paths',
-        nargs='*',
-        default=['.'],
-        help='Repository paths to inspect. Defaults to the current directory.',
+        "paths",
+        nargs="*",
+        default=["."],
+        help="Repository paths to inspect. Defaults to the current directory.",
     )
     audit_parser.add_argument(
-        '--json',
-        action='store_true',
-        dest='json_output',
-        help='Emit machine-readable JSON instead of text output.',
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Emit machine-readable JSON instead of text output.",
     )
     audit_parser.set_defaults(handler=handle_audit)
 
     generate_parser = subparsers.add_parser(
-        'generate',
+        "generate",
         help=(
-            'Programmatically scaffold the deterministic starter architecture blueprint and '
-            'diagram-source layout for one or more repositories.'
+            "Programmatically scaffold the deterministic starter architecture blueprint and "
+            "diagram-source layout for one or more repositories."
         ),
     )
     generate_parser.add_argument(
-        'paths',
-        nargs='*',
-        default=['.'],
-        help='Repository paths to scaffold. Defaults to the current directory.',
+        "paths",
+        nargs="*",
+        default=["."],
+        help="Repository paths to scaffold. Defaults to the current directory.",
     )
     generate_parser.add_argument(
-        '--json',
-        action='store_true',
-        dest='json_output',
-        help='Emit machine-readable JSON instead of text output.',
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Emit machine-readable JSON instead of text output.",
     )
     generate_parser.add_argument(
-        '--render',
-        action='store_true',
-        help='Render the generated or existing diagram sources after scaffolding.',
+        "--render",
+        action="store_true",
+        help="Render the generated or existing diagram sources after scaffolding.",
     )
     generate_parser.set_defaults(handler=handle_generate)
 
     render_parser = subparsers.add_parser(
-        'render',
-        help='Render PlantUML and draw.io diagrams in a target repository using archility-managed tools.',
+        "render",
+        help="Render PlantUML and draw.io diagrams in a target repository using archility-managed tools.",
     )
     render_parser.add_argument(
-        'repo_path',
-        help='Repository path whose docs/diagrams sources should be rendered.',
+        "repo_path",
+        help="Repository path whose docs/diagrams sources should be rendered.",
     )
     render_parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help='Print the planned render commands without executing them.',
+        "--dry-run",
+        action="store_true",
+        help="Print the planned render commands without executing them.",
     )
     render_parser.set_defaults(handler=handle_render)
     return parser
@@ -121,5 +121,5 @@ def main(argv: Sequence[str] | None = None) -> int:
     return args.handler(args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     raise SystemExit(main())
