@@ -5,12 +5,13 @@ skinparam shadowing false
 skinparam defaultFontName Monospace
 skinparam componentStyle rectangle
 skinparam linetype ortho
-rectangle ".github/workflows/ci.yml\n7 detected tools" as source_github_workflows_ci_yml #E0F2FE
+rectangle ".github/workflows/ci.yml\n9 detected tools" as source_github_workflows_ci_yml #E0F2FE
 rectangle "setup.sh\n7 detected tools" as source_setup_sh #E0F2FE
 cloud "actions/checkout" as tool_actions_checkout #FEF3C7
 cloud "actions/setup-python" as tool_actions_setup_python #FEF3C7
 cloud "archility" as tool_archility #FEF3C7
 cloud "bash" as tool_bash #FEF3C7
+cloud "black" as tool_black #FEF3C7
 cloud "cat" as tool_cat #FEF3C7
 cloud "chmod" as tool_chmod #FEF3C7
 cloud "curl" as tool_curl #FEF3C7
@@ -18,14 +19,17 @@ cloud "inkscape" as tool_inkscape #FEF3C7
 cloud "mkdir" as tool_mkdir #FEF3C7
 cloud "pip" as tool_pip #FEF3C7
 cloud "pre-commit" as tool_pre_commit #FEF3C7
+cloud "ruff" as tool_ruff #FEF3C7
 cloud "unittest" as tool_unittest #FEF3C7
 cloud "venv" as tool_venv #FEF3C7
 source_github_workflows_ci_yml --> tool_actions_checkout
 source_github_workflows_ci_yml --> tool_actions_setup_python
 source_github_workflows_ci_yml --> tool_archility
 source_github_workflows_ci_yml --> tool_bash
+source_github_workflows_ci_yml --> tool_black
 source_github_workflows_ci_yml --> tool_pip
 source_github_workflows_ci_yml --> tool_pre_commit
+source_github_workflows_ci_yml --> tool_ruff
 source_github_workflows_ci_yml --> tool_unittest
 source_setup_sh --> tool_cat
 source_setup_sh --> tool_chmod
@@ -36,6 +40,6 @@ source_setup_sh --> tool_pip
 source_setup_sh --> tool_venv
 note as toolingGraphSummary
 Scanned 2 tooling entrypoints.
-Detected 13 third-party tools.
+Detected 15 third-party tools.
 end note
 @enduml

@@ -1,11 +1,11 @@
 @startuml classes_archility
 set namespaceSeparator none
-class "DatabaseDiagramPlan" as archility.render.DatabaseDiagramPlan {
+class "DatabaseDiagramPlan" as src.archility.render.DatabaseDiagramPlan {
   repo_root : Path
   source : Path
   targets : tuple[Path, ...]
 }
-class "DrawioBounds" as archility.generate.DrawioBounds {
+class "DrawioBounds" as src.archility.generate.DrawioBounds {
   bottom : int
   height : int
   left : int
@@ -17,7 +17,7 @@ class "DrawioBounds" as archility.generate.DrawioBounds {
   x : int
   y : int
 }
-class "DrawioCellBounds" as archility.render.DrawioCellBounds {
+class "DrawioCellBounds" as src.archility.render.DrawioCellBounds {
   bottom : float
   height : float
   left : float
@@ -29,14 +29,14 @@ class "DrawioCellBounds" as archility.render.DrawioCellBounds {
   x : float
   y : float
 }
-class "GenerateResult" as archility.generate.GenerateResult {
+class "GenerateResult" as src.archility.generate.GenerateResult {
   created : list[str]
   path : str
   rendered : list[str]
   skipped : list[str]
   to_dict() -> dict[str, object]
 }
-class "PythonDiagramPlan" as archility.render.PythonDiagramPlan {
+class "PythonDiagramPlan" as src.archility.render.PythonDiagramPlan {
   project_name : str
   pydeps_outputs : tuple[Path, ...]
   pyreverse_produced_stems : tuple[str, ...]
@@ -45,14 +45,14 @@ class "PythonDiagramPlan" as archility.render.PythonDiagramPlan {
   repo_root : Path
   targets : tuple[Path, ...]
 }
-class "PythonModuleInfo" as archility.render.PythonModuleInfo {
+class "PythonModuleInfo" as src.archility.render.PythonModuleInfo {
   class_count : int
   function_count : int
   is_package : bool
   name : str
   path : Path
 }
-class "RenderStep" as archility.render.RenderStep {
+class "RenderStep" as src.archility.render.RenderStep {
   command : list[str]
   cwd : str | None
   internal_action : RenderAction | None
@@ -64,7 +64,7 @@ class "RenderStep" as archility.render.RenderStep {
   source : str
   tool : str
 }
-class "RepoAudit" as archility.audit.RepoAudit {
+class "RepoAudit" as src.archility.audit.RepoAudit {
   code_like : bool
   diagram_count : int
   diagram_formats : list[str]
@@ -80,12 +80,12 @@ class "RepoAudit" as archility.audit.RepoAudit {
   workflow_count : int
   to_dict() -> dict[str, object]
 }
-class "ShellDiagramPlan" as archility.render.ShellDiagramPlan {
+class "ShellDiagramPlan" as src.archility.render.ShellDiagramPlan {
   repo_root : Path
   source : Path
   targets : tuple[Path, ...]
 }
-class "ToolingDiagramPlan" as archility.render.ToolingDiagramPlan {
+class "ToolingDiagramPlan" as src.archility.render.ToolingDiagramPlan {
   repo_root : Path
   source : Path
   targets : tuple[Path, ...]
