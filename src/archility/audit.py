@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import os
 import re
 from dataclasses import asdict, dataclass
@@ -397,6 +398,90 @@ def audit_repo(path: str | Path) -> RepoAudit:
 
 def audit_repositories(paths: list[str | Path]) -> list[RepoAudit]:
     return [audit_repo(path) for path in paths]
+
+
+_BACKLOG_HEADER = """\
+# BACKLOG.md
+
+Portfolio backlog for this repository. Pending items are candidates for execution —
+manually or via crew-chief. Entries sourced from archility audit are tagged
+`[archility:YYYY-MM-DD]`; manual entries use `[manual:YYYY-MM-DD]`.
+
+## Pending
+
+## In Progress
+
+## Done
+"""
+
+_PENDING_SECTION_PATTERN = re.compile(r"^## Pending\s*$", re.MULTILINE)
+_NEXT_SECTION_PATTERN = re.compile(r"^## ", re.MULTILINE)
+_ITEM_TEXT_PATTERN = re.compile(r"^\s*-\s*\[[ xX]\]\s*(?:\[[^\]]*\]\s*)?(.+)$")
+
+
+def _normalize_recommendation(text: str) -> str:
+    """Lower-case and strip punctuation for duplicate detection."""
+    return re.sub(r"[^a-z0-9 ]", "", text.lower().strip())
+
+
+def write_backlog_items(
+    repo_path: Path,
+    recommendations: list[str],
+    *,
+    source: str = "archility",
+    date: str | None = None,
+) -> int:
+    """Append new recommendations to BACKLOG.md in repo_path.
+
+    Items already present (matched by normalized text) are skipped.
+    Returns the number of items actually written.
+    """
+    if not recommendations:
+        return 0
+
+    stamp = date or datetime.date.today().isoformat()
+    backlog_path = repo_path / "BACKLOG.md"
+
+    if backlog_path.exists():
+        content = backlog_path.read_text(encoding="utf-8")
+    else:
+        content = _BACKLOG_HEADER
+
+    # Collect already-present item texts (normalized) to deduplicate
+    existing_normalized: set[str] = set()
+    for line in content.splitlines():
+        m = _ITEM_TEXT_PATTERN.match(line)
+        if m:
+            existing_normalized.add(_normalize_recommendation(m.group(1)))
+
+    new_items = [
+        rec for rec in recommendations if _normalize_recommendation(rec) not in existing_normalized
+    ]
+    if not new_items:
+        return 0
+
+    new_lines = "".join(f"- [ ] [{source}:{stamp}] {item}\n" for item in new_items)
+
+    # Insert after the "## Pending" heading, before the next section (or EOF)
+    m_pending = _PENDING_SECTION_PATTERN.search(content)
+    if m_pending:
+        insert_pos = m_pending.end()
+        # Skip any blank lines immediately after the heading
+        rest = content[insert_pos:]
+        m_next = _NEXT_SECTION_PATTERN.search(rest)
+        if m_next:
+            # Insert just before the next section, with a blank line separator
+            insert_at = insert_pos + m_next.start()
+            content = content[:insert_at] + new_lines + "\n" + content[insert_at:]
+        else:
+            # No next section — append to end of Pending block
+            content = content.rstrip("\n") + "\n" + new_lines
+    else:
+        # No Pending section found — append a minimal block
+        content = content.rstrip("\n") + "\n\n## Pending\n\n" + new_lines
+
+    backlog_path.write_text(content, encoding="utf-8")
+    return len(new_items)
 
 
 def format_text_report(results: list[RepoAudit]) -> str:

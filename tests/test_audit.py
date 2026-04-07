@@ -11,6 +11,7 @@ from archility.audit import (
     collect_shell_diagram_targets,
     collect_sql_diagram_targets,
     collect_tooling_diagram_targets,
+    write_backlog_items,
 )
 from archility.cli import main
 
@@ -176,6 +177,76 @@ class AuditTests(unittest.TestCase):
             self.assertFalse(payload[0]["code_like"])
             self.assertEqual(payload[0]["toolchains"], [])
             self.assertEqual(payload[0]["diagram_formats"], [])
+
+
+class WriteBacklogTests(unittest.TestCase):
+    def test_creates_backlog_with_recommendations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            recs = ["Add AGENTS.md.", "Add LESSONSLEARNED.md."]
+            written = write_backlog_items(root, recs, source="archility", date="2026-04-07")
+
+            self.assertEqual(written, 2)
+            content = (root / "BACKLOG.md").read_text()
+            self.assertIn("- [ ] [archility:2026-04-07] Add AGENTS.md.", content)
+            self.assertIn("- [ ] [archility:2026-04-07] Add LESSONSLEARNED.md.", content)
+
+    def test_skips_duplicate_items(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            recs = ["Add AGENTS.md."]
+            write_backlog_items(root, recs, source="archility", date="2026-04-01")
+            # Re-run with same recommendation — should not duplicate
+            written = write_backlog_items(root, recs, source="archility", date="2026-04-07")
+
+            self.assertEqual(written, 0)
+            content = (root / "BACKLOG.md").read_text()
+            self.assertEqual(content.count("Add AGENTS.md."), 1)
+
+    def test_appends_to_existing_backlog(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "BACKLOG.md").write_text(
+                "# BACKLOG.md\n\n## Pending\n\n- [ ] [manual:2026-01-01] Existing item.\n\n## Done\n"
+            )
+            written = write_backlog_items(
+                root, ["New item."], source="archility", date="2026-04-07"
+            )
+
+            self.assertEqual(written, 1)
+            content = (root / "BACKLOG.md").read_text()
+            self.assertIn("Existing item.", content)
+            self.assertIn("[archility:2026-04-07] New item.", content)
+            # New item should appear before Done section
+            pending_idx = content.index("## Pending")
+            new_idx = content.index("New item.")
+            done_idx = content.index("## Done")
+            self.assertGreater(new_idx, pending_idx)
+            self.assertLess(new_idx, done_idx)
+
+    def test_returns_zero_for_empty_recommendations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            written = write_backlog_items(root, [], source="archility", date="2026-04-07")
+            self.assertEqual(written, 0)
+            self.assertFalse((root / "BACKLOG.md").exists())
+
+    def test_cli_write_backlog_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # A code-like repo missing blueprint/workflow triggers recommendations
+            (root / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+            (root / "AGENTS.md").write_text("agents\n")
+            (root / "LESSONSLEARNED.md").write_text("lessons\n")
+
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                exit_code = main(["audit", str(root), "--write-backlog"])
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue((root / "BACKLOG.md").exists())
+            content = (root / "BACKLOG.md").read_text()
+            self.assertIn("- [ ] [archility:", content)
 
 
 if __name__ == "__main__":
