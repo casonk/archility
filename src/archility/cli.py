@@ -6,7 +6,7 @@ import argparse
 import json
 from collections.abc import Sequence
 
-from .audit import audit_repositories, format_text_report
+from .audit import audit_repositories, format_text_report, write_backlog_items
 from .generate import format_generate_report, generate_repositories
 from .render import build_render_steps, format_render_plan, run_render_steps
 
@@ -36,6 +36,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         dest="json_output",
         help="Emit machine-readable JSON instead of text output.",
+    )
+    audit_parser.add_argument(
+        "--write-backlog",
+        action="store_true",
+        dest="write_backlog",
+        help=(
+            "Append new recommendations to each repo's BACKLOG.md "
+            "(creates the file if absent; skips items already present)."
+        ),
     )
     audit_parser.set_defaults(handler=handle_audit)
 
@@ -83,12 +92,23 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def handle_audit(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
     results = audit_repositories(args.paths)
     if args.json_output:
         payload = [result.to_dict() for result in results]
         print(json.dumps(payload, indent=2, sort_keys=True))
-        return 0
-    print(format_text_report(results))
+    else:
+        print(format_text_report(results))
+    if getattr(args, "write_backlog", False):
+        for result in results:
+            if not result.recommendations:
+                continue
+            written = write_backlog_items(Path(result.path), result.recommendations)
+            if written:
+                print(f"  backlog: +{written} item(s) written to {result.path}/BACKLOG.md")
+            else:
+                print(f"  backlog: no new items for {result.path}")
     return 0
 
 
