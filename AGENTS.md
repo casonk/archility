@@ -55,6 +55,17 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m unittest discover -s tests -
 - Keep audit rules explainable; opaque scoring heuristics should be avoided unless they are surfaced clearly in the output.
 - Treat this repo as the standard home for architecture-oriented portfolio tooling, including shared diagram bootstrap and render flows, unless the user explicitly chooses another location.
 
+## Local CI Verification
+
+Run before every push:
+
+```bash
+pre-commit run --all-files
+pytest -q
+```
+
+Do not push changes that have not passed all checks locally.
+
 ## Portfolio Standards Reference
 
 For portfolio-wide repository standards and baseline conventions, consult the control-plane repo at `./util-repos/traction-control` from the portfolio root.
