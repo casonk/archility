@@ -1,4 +1,4 @@
-# REFS-PUBLIC.md — Public References
+# REFS-PUBLIC.md - Public References
 
 > Record external public repositories, datasets, documentation, APIs, or other
 > public resources that this repository utilizes or depends on.
@@ -6,22 +6,21 @@
 
 ## Public Repositories
 
-<!-- External repos this project depends on, forks, or integrates with:
-- https://github.com/org/repo — description of usage
--->
+- https://github.com/plantuml/plantuml - PlantUML renderer used for checked-in diagram outputs
+- https://github.com/jgraph/drawio - draw.io / diagrams.net project used for .drawio exports
+- https://github.com/thebjorn/pydeps - import-graph sidecar generation
+- https://github.com/pylint-dev/pylint - pyreverse UML sidecar generation
 
 ## Public Datasets and APIs
 
-<!-- Publicly accessible data sources, REST APIs, or external feeds consumed here:
-- https://example.com/dataset — description of usage
--->
+- No standing external data APIs are required; the tool operates on local repository content.
 
 ## Documentation and Specifications
 
-<!-- Reference docs, RFCs, standards, or upstream project documentation:
-- https://docs.example.com — description
--->
+- https://plantuml.com/ - PlantUML language and rendering reference
+- https://www.drawio.com/doc/ - draw.io / diagrams.net documentation
+- https://graphviz.org/documentation/ - Graphviz documentation for richer PlantUML layouts when custom diagrams rely on dot
 
 ## Notes
 
-<!-- Any context about how these public references are used or versioned -->
+- archility is a local toolchain orchestrator. Its public dependency surface is the diagram and introspection toolchain, not a remote service API.
