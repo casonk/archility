@@ -717,7 +717,9 @@ def _build_pydeps_summary_svg(repo_root: Path, target: Path) -> str:
     ]
     if import_roots:
         if stdlib_imports and not relative_imports and not other_imports:
-            lines.append("Detected only stdlib import roots, so the graph would otherwise appear blank.")
+            lines.append(
+                "Detected only stdlib import roots, so the graph would otherwise appear blank."
+            )
         else:
             lines.append(
                 "Detected imports, but none produced a visible repo-local dependency node graph."
