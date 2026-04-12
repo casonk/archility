@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import ast
+import html
 import io
 import re
 import shlex
 import subprocess
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -419,6 +421,8 @@ def run_render_steps(steps: list[RenderStep], *, runner: RunCommand | None = Non
             _ensure_step_output(step.source, Path(produced_output), Path(target_output))
         if step.tool == "pyreverse":
             _normalize_pyreverse_outputs(step)
+        elif step.tool == "pydeps":
+            _normalize_pydeps_outputs(step)
 
 
 def _default_runner(command: list[str], cwd: str | None) -> None:
@@ -667,6 +671,175 @@ def _normalize_text_output(path: Path) -> None:
     if payload.endswith(b"\n"):
         return
     path.write_bytes(payload + b"\n")
+
+
+def _normalize_pydeps_outputs(step: RenderStep) -> None:
+    if step.cwd is None:
+        return
+
+    repo_root = Path(step.cwd)
+    target = repo_root / step.source
+    for output in (Path(path) for path in step.outputs):
+        if output.suffix.lower() != ".svg" or not output.exists():
+            continue
+        if not _is_blank_pydeps_svg(output):
+            continue
+        output.write_text(_build_pydeps_summary_svg(repo_root, target), encoding="utf-8")
+        _normalize_text_output(output)
+
+
+def _is_blank_pydeps_svg(path: Path) -> bool:
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    if 'class="node"' in text or 'class="edge"' in text or "<text" in text:
+        return False
+    match = re.search(r'<svg[^>]*width="([0-9.]+)pt"[^>]*height="([0-9.]+)pt"', text)
+    if match is not None:
+        try:
+            width = float(match.group(1))
+            height = float(match.group(2))
+        except ValueError:
+            width = 0.0
+            height = 0.0
+        if width <= 12.0 and height <= 12.0:
+            return True
+    return 'viewBox="0.00 0.00 8.00 8.00"' in text
+
+
+def _build_pydeps_summary_svg(repo_root: Path, target: Path) -> str:
+    files = _iter_python_files_for_target(target) if target.exists() else []
+    import_roots, parse_failures = _collect_python_import_roots(files)
+    relative_imports, stdlib_imports, other_imports = _partition_python_import_roots(import_roots)
+    target_label = _relative_repo_path(repo_root, target) if target.exists() else target.as_posix()
+
+    lines = [
+        f"Scanned {len(files)} Python file{'s' if len(files) != 1 else ''}.",
+        "pydeps produced no visible dependency graph for this target.",
+    ]
+    if import_roots:
+        if stdlib_imports and not relative_imports and not other_imports:
+            lines.append("Detected only stdlib import roots, so the graph would otherwise appear blank.")
+        else:
+            lines.append(
+                "Detected imports, but none produced a visible repo-local dependency node graph."
+            )
+    else:
+        lines.append("No import statements were detected.")
+
+    lines.extend(_wrap_summary_items("Relative imports: ", relative_imports))
+    lines.extend(_wrap_summary_items("Stdlib imports: ", stdlib_imports))
+    lines.extend(_wrap_summary_items("Other imports: ", other_imports))
+    if parse_failures:
+        lines.extend(_wrap_summary_items("Parse failures: ", parse_failures))
+
+    return _build_summary_svg(
+        title="Python Import Summary",
+        subtitle=target_label,
+        lines=lines,
+        accent="#2563EB",
+    )
+
+
+def _collect_python_import_roots(files: list[Path]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    import_roots: set[str] = set()
+    parse_failures: list[str] = []
+
+    for path in files:
+        try:
+            module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except (OSError, SyntaxError, UnicodeDecodeError):
+            parse_failures.append(path.name)
+            continue
+        for node in ast.walk(module):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    root = alias.name.split(".", 1)[0]
+                    if root:
+                        import_roots.add(root)
+            elif isinstance(node, ast.ImportFrom):
+                prefix = "." * node.level
+                if node.module:
+                    root = prefix + node.module.split(".", 1)[0]
+                    if root:
+                        import_roots.add(root)
+                    continue
+                for alias in node.names:
+                    root = prefix + alias.name.split(".", 1)[0]
+                    if root:
+                        import_roots.add(root)
+
+    return (tuple(sorted(import_roots)), tuple(sorted(parse_failures)))
+
+
+def _partition_python_import_roots(
+    import_roots: tuple[str, ...],
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    relative: list[str] = []
+    stdlib: list[str] = []
+    other: list[str] = []
+    stdlib_names = getattr(sys, "stdlib_module_names", frozenset())
+
+    for root in import_roots:
+        normalized = root.lstrip(".")
+        if root.startswith("."):
+            relative.append(root)
+        elif normalized in stdlib_names:
+            stdlib.append(root)
+        else:
+            other.append(root)
+
+    return (tuple(relative), tuple(stdlib), tuple(other))
+
+
+def _wrap_summary_items(prefix: str, items: tuple[str, ...], *, width: int = 86) -> list[str]:
+    if not items:
+        return [prefix + "none"]
+
+    lines: list[str] = []
+    current = prefix
+    continuation_prefix = " " * len(prefix)
+    for item in items:
+        token = item if current == prefix else f", {item}"
+        if len(current) + len(token) <= width:
+            current += token
+            continue
+        lines.append(current)
+        current = continuation_prefix + item
+    lines.append(current)
+    return lines
+
+
+def _build_summary_svg(*, title: str, subtitle: str, lines: list[str], accent: str) -> str:
+    width = 960
+    line_height = 22
+    body_start_y = 126
+    height = body_start_y + max(len(lines), 1) * line_height + 42
+    escaped_title = html.escape(title)
+    escaped_subtitle = html.escape(subtitle)
+    body = "\n".join(
+        f'    <tspan x="40" y="{body_start_y + index * line_height}">{html.escape(line)}</tspan>'
+        for index, line in enumerate(lines)
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" '
+        'xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title subtitle">\n'
+        '  <rect width="100%" height="100%" fill="#F8FAFC"/>\n'
+        f'  <rect x="20" y="20" width="{width - 40}" height="{height - 40}" rx="16" '
+        'fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>\n'
+        f'  <rect x="20" y="20" width="{width - 40}" height="72" rx="16" '
+        f'fill="{accent}" fill-opacity="0.10" stroke="{accent}" stroke-width="0"/>\n'
+        f'  <text id="title" x="40" y="62" font-family="Monospace" font-size="28" '
+        'font-weight="700" fill="#0F172A">'
+        f"{escaped_title}</text>\n"
+        f'  <text id="subtitle" x="40" y="96" font-family="Monospace" font-size="18" '
+        'fill="#334155">'
+        f"{escaped_subtitle}</text>\n"
+        '  <text x="40" font-family="Monospace" font-size="17" fill="#0F172A" '
+        'xml:space="preserve">\n'
+        f"{body}\n"
+        "  </text>\n"
+        "</svg>\n"
+    )
 
 
 def _is_package_target(path: Path) -> bool:
