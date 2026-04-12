@@ -758,6 +758,54 @@ class RenderTests(unittest.TestCase):
             self.assertIn("Scanned 1 Python module.", normalized)
             self.assertIn("python-import-deps-refresh.svg", normalized)
 
+    def test_run_render_steps_replaces_blank_pydeps_svg_with_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp) / "demo"
+            (repo_root / "docs" / "diagrams").mkdir(parents=True)
+            (repo_root / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+            (repo_root / "scripts").mkdir()
+            (repo_root / "scripts" / "export_profile.py").write_text(
+                "import argparse\nimport contextlib\nimport ssl\n",
+            )
+            tool_root = repo_root / "tool-home" / "tools" / "bin"
+            tool_root.mkdir(parents=True)
+            for tool_name in ("plantuml", "pydeps", "pyreverse"):
+                (tool_root / tool_name).write_text("#!/usr/bin/env bash\n")
+
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
+            blank_pydeps_svg = """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="8pt" height="8pt" viewBox="0.00 0.00 8.00 8.00"
+xmlns="http://www.w3.org/2000/svg">
+<g id="graph0" class="graph"><polygon fill="white" stroke="none" points="-4,4 -4,-4 4,-4 4,4 -4,4"/></g>
+</svg>
+"""
+
+            def runner(command: list[str], cwd: str | None) -> None:
+                if command[0].endswith("pyreverse"):
+                    (repo_root / "docs" / "diagrams" / "classes_demo.puml").write_text(
+                        "@startuml\n@enduml\n"
+                    )
+                elif command[0].endswith("pydeps"):
+                    output = repo_root / command[command.index("-o") + 1]
+                    output.write_text(blank_pydeps_svg)
+                elif "-tsvg" in command:
+                    (repo_root / "docs" / "diagrams" / "classes_demo.svg").write_text("<svg />\n")
+                elif "-tpng" in command:
+                    (repo_root / "docs" / "diagrams" / "classes_demo.png").write_text("png\n")
+
+            run_render_steps(steps, runner=runner)
+
+            normalized = (
+                repo_root / "docs" / "diagrams" / "python-import-deps-scripts-export_profile.svg"
+            ).read_text(encoding="utf-8")
+            self.assertIn("Python Import Summary", normalized)
+            self.assertIn("scripts/export_profile.py", normalized)
+            self.assertIn("pydeps produced no visible dependency graph", normalized)
+            self.assertIn("Stdlib imports: argparse, contextlib, ssl", normalized)
+            self.assertNotIn('width="8pt"', normalized)
+
     def test_run_render_steps_rewrites_package_diagram_with_package_summaries(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = Path(tmp) / "demo"
