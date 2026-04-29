@@ -10,9 +10,22 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
-  {name = "Codex"},
+  {name = "Cason Konzer", email = "casonk@umich.edu"},
+]
+keywords = ["architecture", "diagrams", "plantuml", "drawio", "portfolio"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Operating System :: OS Independent",
+  "Topic :: Software Development :: Documentation",
+  "License :: OSI Approved :: MIT License",
 ]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/casonk/archility"
+Repository = "https://github.com/casonk/archility"
+Changelog = "https://github.com/casonk/archility/blob/main/CHANGELOG.md"
 
 [project.scripts]
 archility = "archility.cli:main"
