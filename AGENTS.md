@@ -55,6 +55,12 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m unittest discover -s tests -
 - Keep audit rules explainable; opaque scoring heuristics should be avoided unless they are surfaced clearly in the output.
 - Treat this repo as the standard home for architecture-oriented portfolio tooling, including shared diagram bootstrap and render flows, unless the user explicitly chooses another location.
 
+## Sudo Boundary
+
+Agents will never be able to run `sudo` commands in this environment. If a task requires elevated system changes, make the repo edits and run the validation that can be done without `sudo`, then give the user the exact command(s) to run.
+
+Always require the user to run those commands instead of retrying `sudo`; do not claim a sudo-backed live change was applied until the user shares the result.
+
 ## Local CI Verification
 
 Run before every push:
