@@ -34,8 +34,13 @@ archility = "archility.cli:main"
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
+    "ruff",
     "dyno_lab @ git+https://github.com/casonk/dyno-lab.git",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
 [tool.black]
 line-length = 100
 target-version = ["py311"]
