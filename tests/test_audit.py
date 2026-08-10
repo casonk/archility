@@ -19,7 +19,7 @@ from archility.cli import main
 class AuditTests(unittest.TestCase):
     def test_audit_repo_detects_code_like_blueprint_workflow_and_toolchains(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             (root / "AGENTS.md").write_text("agents\n")
             (root / "LESSONSLEARNED.md").write_text("lessons\n")
             (root / "pyproject.toml").write_text('[project]\nname = "demo"\n')
@@ -54,7 +54,7 @@ class AuditTests(unittest.TestCase):
 
     def test_audit_repo_recommends_missing_blueprint_for_code_repo(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             (root / "AGENTS.md").write_text("agents\n")
             (root / "LESSONSLEARNED.md").write_text("lessons\n")
             (root / "src").mkdir()
@@ -72,7 +72,7 @@ class AuditTests(unittest.TestCase):
 
     def test_audit_repo_recommends_documenting_toolchain_for_render_only_diagrams(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             (root / "AGENTS.md").write_text("agents\n")
             (root / "LESSONSLEARNED.md").write_text("lessons\n")
             (root / "docs" / "diagrams").mkdir(parents=True)
@@ -91,7 +91,7 @@ class AuditTests(unittest.TestCase):
 
     def test_audit_repo_detects_pydeps_and_pyreverse_toolchain_hints(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             (root / "README.md").write_text(
                 "Use pydeps for import graphs and pyreverse for UML diagrams.\n"
             )
@@ -103,7 +103,7 @@ class AuditTests(unittest.TestCase):
 
     def test_collect_python_diagram_targets_excludes_tests_packages(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             (root / "pyproject.toml").write_text('[project]\nname = "demo"\n')
             (root / "src" / "demo").mkdir(parents=True)
             (root / "src" / "demo" / "__init__.py").write_text("")
@@ -121,7 +121,7 @@ class AuditTests(unittest.TestCase):
 
     def test_collect_shell_sql_and_tooling_targets(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             (root / "scripts").mkdir()
             (root / "scripts" / "deploy.sh").write_text(
                 "#!/usr/bin/env bash\ncurl https://example.com\n"
@@ -162,7 +162,7 @@ class AuditTests(unittest.TestCase):
 
     def test_cli_json_output(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             (root / "AGENTS.md").write_text("agents\n")
             (root / "LESSONSLEARNED.md").write_text("lessons\n")
 
@@ -182,7 +182,7 @@ class AuditTests(unittest.TestCase):
 class WriteBacklogTests(unittest.TestCase):
     def test_creates_backlog_with_recommendations(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             recs = ["Add AGENTS.md.", "Add LESSONSLEARNED.md."]
             written = write_backlog_items(root, recs, source="archility", date="2026-04-07")
 
@@ -193,7 +193,7 @@ class WriteBacklogTests(unittest.TestCase):
 
     def test_skips_duplicate_items(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             recs = ["Add AGENTS.md."]
             write_backlog_items(root, recs, source="archility", date="2026-04-01")
             # Re-run with same recommendation — should not duplicate
@@ -205,7 +205,7 @@ class WriteBacklogTests(unittest.TestCase):
 
     def test_appends_to_existing_backlog(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             (root / "BACKLOG.md").write_text(
                 "# BACKLOG.md\n\n## Pending\n\n- [ ] [manual:2026-01-01] Existing item.\n\n## Done\n"
             )
@@ -226,14 +226,14 @@ class WriteBacklogTests(unittest.TestCase):
 
     def test_returns_zero_for_empty_recommendations(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             written = write_backlog_items(root, [], source="archility", date="2026-04-07")
             self.assertEqual(written, 0)
             self.assertFalse((root / "BACKLOG.md").exists())
 
     def test_cli_write_backlog_flag(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             # A code-like repo missing blueprint/workflow triggers recommendations
             (root / "pyproject.toml").write_text('[project]\nname = "demo"\n')
             (root / "AGENTS.md").write_text("agents\n")
