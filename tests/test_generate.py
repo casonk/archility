@@ -241,6 +241,28 @@ class GenerateTests(unittest.TestCase):
             self.assertEqual(payload[0]["path"], str(repo_root.resolve()))
             self.assertIn("docs/contributor-architecture-blueprint.md", payload[0]["created"])
 
+    def test_generated_files_end_with_a_single_newline(self):
+        """Scaffolded files must satisfy pre-commit's end-of-file-fixer.
+
+        Generated output lands in repos whose CI runs that hook, so a missing
+        final newline made the first CI run fail on archility's own output.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp) / "demo-repo"
+            repo_root.mkdir()
+            (repo_root / "scripts").mkdir()
+
+            generate_repo(repo_root)
+
+            generated = sorted((repo_root / "docs").rglob("*"))
+            files = [p for p in generated if p.is_file()]
+            self.assertTrue(files, "expected generate_repo to scaffold files")
+            for path in files:
+                data = path.read_bytes()
+                rel = path.relative_to(repo_root)
+                self.assertTrue(data.endswith(b"\n"), f"{rel} has no trailing newline")
+                self.assertFalse(data.endswith(b"\n\n"), f"{rel} has a blank line at EOF")
+
 
 if __name__ == "__main__":
     unittest.main()
