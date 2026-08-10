@@ -389,18 +389,23 @@ def build_render_steps(
     return steps
 
 
-def ensure_tools_available(steps: list[RenderStep]) -> None:
+def missing_tool_paths(steps: list[RenderStep]) -> list[str]:
+    """Tool wrappers referenced by *steps* that are not installed."""
     missing: list[str] = []
     seen: set[str] = set()
     for step in steps:
         if step.is_internal:
             continue
-        tool_path = Path(step.command[0])
         if step.command[0] in seen:
             continue
         seen.add(step.command[0])
-        if not tool_path.exists():
-            missing.append(str(tool_path))
+        if not Path(step.command[0]).exists():
+            missing.append(step.command[0])
+    return missing
+
+
+def ensure_tools_available(steps: list[RenderStep]) -> None:
+    missing = missing_tool_paths(steps)
     if missing:
         joined = "\n".join(f"- {path}" for path in missing)
         raise FileNotFoundError(
@@ -408,9 +413,44 @@ def ensure_tools_available(steps: list[RenderStep]) -> None:
         )
 
 
-def run_render_steps(steps: list[RenderStep], *, runner: RunCommand | None = None) -> None:
+def partition_runnable_steps(
+    steps: list[RenderStep],
+) -> tuple[list[RenderStep], list[RenderStep]]:
+    """Split *steps* into those whose tool exists and those whose tool is missing.
+
+    setup.sh cannot install every tool on every platform -- draw.io ships as a
+    Linux AppImage, so a macOS checkout has plantuml but no drawio. Refusing the
+    whole render in that case leaves a repo with no artifacts at all, when the
+    PlantUML half would have rendered fine.
+    """
+    missing = set(missing_tool_paths(steps))
+    runnable: list[RenderStep] = []
+    skipped: list[RenderStep] = []
+    for step in steps:
+        if not step.is_internal and step.command[0] in missing:
+            skipped.append(step)
+        else:
+            runnable.append(step)
+    return runnable, skipped
+
+
+def run_render_steps(
+    steps: list[RenderStep],
+    *,
+    runner: RunCommand | None = None,
+    skip_missing_tools: bool = False,
+) -> list[RenderStep]:
+    """Execute *steps*, returning the steps skipped for want of a tool.
+
+    With ``skip_missing_tools`` the render degrades to whatever toolchain is
+    present instead of refusing outright; the default stays fail-closed.
+    """
     _normalize_drawio_sources(steps)
-    ensure_tools_available(steps)
+    skipped: list[RenderStep] = []
+    if skip_missing_tools:
+        steps, skipped = partition_runnable_steps(steps)
+    else:
+        ensure_tools_available(steps)
     execute = runner or _default_runner
     for step in steps:
         if step.internal_action is not None:
@@ -423,6 +463,7 @@ def run_render_steps(steps: list[RenderStep], *, runner: RunCommand | None = Non
             _normalize_pyreverse_outputs(step)
         elif step.tool == "pydeps":
             _normalize_pydeps_outputs(step)
+    return skipped
 
 
 def _default_runner(command: list[str], cwd: str | None) -> None:
