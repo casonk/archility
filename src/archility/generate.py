@@ -786,6 +786,11 @@ def write_if_missing(path: Path, content: str) -> bool:
     if path.exists():
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Scaffolded files land in repos whose pre-commit runs end-of-file-fixer, so
+    # a missing final newline makes the very first CI run fail on generated
+    # output. Normalise here rather than in each text builder.
+    if not content.endswith("\n"):
+        content += "\n"
     path.write_text(content, encoding="utf-8")
     return True
 
