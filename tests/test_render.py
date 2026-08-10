@@ -6,7 +6,12 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 from archility.cli import main
-from archility.render import build_render_steps, format_render_plan, run_render_steps
+from archility.render import (
+    build_render_steps,
+    format_render_plan,
+    partition_runnable_steps,
+    run_render_steps,
+)
 
 
 class RenderTests(unittest.TestCase):
@@ -993,6 +998,47 @@ xmlns="http://www.w3.org/2000/svg">
             self.assertTrue(
                 (repo_root / "docs" / "diagrams" / "tooling-integrations.puml.svg").exists()
             )
+
+    def test_render_skips_steps_whose_tool_is_missing(self):
+        """A partial toolchain should still render what it can.
+
+        setup.sh cannot install draw.io on macOS, so refusing the whole render
+        left repos with no artifacts even though PlantUML was available.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp).resolve() / "demo"
+            diagrams = repo_root / "docs" / "diagrams"
+            diagrams.mkdir(parents=True)
+            (diagrams / "repo-architecture.puml").write_text("@startuml\n@enduml\n")
+            (diagrams / "repo-architecture.drawio").write_text("<mxfile />\n")
+
+            tools = Path(tmp).resolve() / "tools" / "bin"
+            tools.mkdir(parents=True)
+            plantuml = tools / "plantuml"
+            plantuml.write_text("#!/bin/sh\n")
+            plantuml.chmod(0o755)
+            # deliberately no drawio wrapper
+
+            steps = build_render_steps(repo_root, archility_root=Path(tmp).resolve())
+            runnable, skipped = partition_runnable_steps(steps)
+
+            self.assertTrue(runnable, "plantuml steps should remain runnable")
+            self.assertTrue(skipped, "drawio steps should be skipped")
+            self.assertTrue(all(s.tool == "plantuml" for s in runnable))
+            self.assertTrue(all(s.tool == "drawio" for s in skipped))
+            self.assertEqual(len(runnable) + len(skipped), len(steps))
+
+    def test_run_render_steps_still_fails_closed_by_default(self):
+        """Without the opt-in flag a missing tool must remain a hard error."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp).resolve() / "demo"
+            diagrams = repo_root / "docs" / "diagrams"
+            diagrams.mkdir(parents=True)
+            (diagrams / "repo-architecture.drawio").write_text("<mxfile />\n")
+
+            steps = build_render_steps(repo_root, archility_root=Path(tmp).resolve())
+            with self.assertRaises(FileNotFoundError):
+                run_render_steps(steps, runner=lambda command, cwd: None)
 
 
 if __name__ == "__main__":
