@@ -83,6 +83,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Repository path whose docs/diagrams sources should be rendered.",
     )
     render_parser.add_argument(
+        "--skip-missing-tools",
+        action="store_true",
+        help=(
+            "Render with whatever toolchain is installed instead of failing when a "
+            "tool wrapper is absent (draw.io, for example, has no macOS wrapper)."
+        ),
+    )
+    render_parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print the planned render commands without executing them.",
@@ -130,8 +138,15 @@ def handle_render(args: argparse.Namespace) -> int:
     if not steps:
         print(format_render_plan(args.repo_path, steps))
         return 0
-    run_render_steps(steps)
-    print(format_render_plan(args.repo_path, steps))
+    skipped = run_render_steps(steps, skip_missing_tools=args.skip_missing_tools)
+    rendered = [step for step in steps if step not in skipped]
+    print(format_render_plan(args.repo_path, rendered))
+    if skipped:
+        missing = sorted({step.command[0] for step in skipped})
+        print(f"skipped: {len(skipped)} step(s) whose tool is not installed")
+        for path in missing:
+            print(f"  - {path}")
+        print("  install the missing toolchain with archility/setup.sh to render these")
     return 0
 
 

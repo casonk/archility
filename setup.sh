@@ -125,10 +125,18 @@ install_system_packages() {
 }
 
 install_plantuml() {
-  command -v java >/dev/null 2>&1 || {
-    echo "[setup] java is required for PlantUML. Install a JRE first." >&2
+  # macOS ships a /usr/bin/java stub that exists but reports "Unable to locate a
+  # Java Runtime", so `command -v java` passes on a machine with no JRE and the
+  # failure only surfaces later as a PlantUML render error. Probe the runtime.
+  if ! java -version >/dev/null 2>&1; then
+    echo "[setup] java is required for PlantUML but no working Java runtime was found." >&2
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+      echo "[setup] On macOS install one with: brew install openjdk" >&2
+    else
+      echo "[setup] Install a JRE first (for example default-jre-headless)." >&2
+    fi
     exit 1
-  }
+  fi
   mkdir -p "${PLANTUML_DIR}" "${BIN_DIR}"
   local jar_path="${PLANTUML_DIR}/plantuml.jar"
   local jar_url="https://github.com/plantuml/plantuml/releases/download/v${PLANTUML_VERSION}/plantuml-${PLANTUML_VERSION}.jar"
@@ -216,6 +224,28 @@ WRAPPER
 install_drawio() {
   if [[ "${SKIP_DRAWIO}" -eq 1 ]]; then
     echo "[setup] Skipping draw.io download (--skip-drawio)."
+    return
+  fi
+
+  # The AppImage is Linux-only. On macOS, wire the wrapper to a draw.io.app
+  # install if one is present rather than silently leaving no drawio at all --
+  # archility render needs the wrapper to exist to render .drawio sources.
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    local macos_app="/Applications/draw.io.app/Contents/MacOS/draw.io"
+    if [[ -x "${macos_app}" ]]; then
+      mkdir -p "${BIN_DIR}"
+      cat > "${BIN_DIR}/drawio" <<WRAPPER
+#!/usr/bin/env bash
+set -euo pipefail
+exec "${macos_app}" "\$@"
+WRAPPER
+      chmod +x "${BIN_DIR}/drawio"
+      echo "[setup] draw.io wrapper points at ${macos_app}"
+    else
+      echo "[setup] draw.io not found at ${macos_app}." >&2
+      echo "[setup] Install it with: brew install --cask drawio" >&2
+      echo "[setup] Until then render .puml sources with: archility render <repo> --skip-missing-tools" >&2
+    fi
     return
   fi
 
