@@ -28,7 +28,7 @@ class RenderTests(unittest.TestCase):
 
     def test_build_render_steps_for_puml_and_drawio_sources(self):
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp) / "demo"
+            repo_root = Path(tmp).resolve() / "demo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             (repo_root / "docs" / "diagrams" / "repo-architecture.puml").write_text(
                 "@startuml\n@enduml\n"
@@ -72,7 +72,7 @@ class RenderTests(unittest.TestCase):
 
     def test_build_render_steps_for_python_repo_adds_pydeps_and_pyreverse(self):
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp) / "demo-repo"
+            repo_root = Path(tmp).resolve() / "demo-repo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             (repo_root / "docs" / "diagrams" / "classes_demo-repo.puml").write_text(
                 "@startuml\n@enduml\n"
@@ -159,7 +159,7 @@ class RenderTests(unittest.TestCase):
 
     def test_build_render_steps_for_multiple_python_modules_adds_package_diagram(self):
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp) / "demo-repo"
+            repo_root = Path(tmp).resolve() / "demo-repo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             (repo_root / "pyproject.toml").write_text('[project]\nname = "demo-repo"\n')
             (repo_root / "scripts").mkdir()
@@ -216,7 +216,7 @@ class RenderTests(unittest.TestCase):
 
     def test_build_render_steps_for_shell_database_and_tooling_sidecars(self):
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp) / "demo-repo"
+            repo_root = Path(tmp).resolve() / "demo-repo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             (repo_root / "scripts").mkdir()
             (repo_root / "scripts" / "common.sh").write_text("#!/usr/bin/env bash\necho common\n")
@@ -277,14 +277,14 @@ class RenderTests(unittest.TestCase):
 
     def test_format_render_plan_for_empty_repo(self):
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp)
+            repo_root = Path(tmp).resolve()
             plan = format_render_plan(repo_root, [])
             self.assertIn("steps: 0", plan)
             self.assertIn("no diagram source files found", plan)
 
     def test_cli_render_dry_run(self):
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp) / "demo"
+            repo_root = Path(tmp).resolve() / "demo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             (repo_root / "docs" / "diagrams" / "repo-architecture.puml").write_text(
                 "@startuml\n@enduml\n"
@@ -301,7 +301,7 @@ class RenderTests(unittest.TestCase):
 
     def test_run_render_steps_renames_plantuml_default_output(self):
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp) / "demo"
+            repo_root = Path(tmp).resolve() / "demo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             source = repo_root / "docs" / "diagrams" / "repo-architecture.puml"
             source.write_text("@startuml\n@enduml\n")
@@ -337,7 +337,7 @@ class RenderTests(unittest.TestCase):
 
     def test_run_render_steps_normalizes_drawio_edge_styles_before_export(self):
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp) / "demo"
+            repo_root = Path(tmp).resolve() / "demo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             source = repo_root / "docs" / "diagrams" / "repo-architecture.drawio"
             source.write_text(
@@ -404,7 +404,7 @@ class RenderTests(unittest.TestCase):
 
     def test_run_render_steps_routes_drawio_edges_through_open_corridors(self):
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp) / "demo"
+            repo_root = Path(tmp).resolve() / "demo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             source = repo_root / "docs" / "diagrams" / "repo-architecture.drawio"
             source.write_text(
@@ -471,7 +471,7 @@ class RenderTests(unittest.TestCase):
         # distinct corridor coordinate so the horizontal segments do not stack
         # on top of each other.
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp) / "demo"
+            repo_root = Path(tmp).resolve() / "demo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             source = repo_root / "docs" / "diagrams" / "repo-architecture.drawio"
             source.write_text(
@@ -562,7 +562,7 @@ class RenderTests(unittest.TestCase):
         # crossing between the panels must use corridors inside the panel
         # height range rather than routing above or below the entire diagram.
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp) / "demo"
+            repo_root = Path(tmp).resolve() / "demo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             source = repo_root / "docs" / "diagrams" / "repo-architecture.drawio"
             source.write_text(
@@ -660,7 +660,7 @@ class RenderTests(unittest.TestCase):
         self,
     ):
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp) / "demo"
+            repo_root = Path(tmp).resolve() / "demo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             (repo_root / "pyproject.toml").write_text('[project]\nname = "demo"\n')
             (repo_root / "src" / "demo").mkdir(parents=True)
@@ -722,7 +722,7 @@ class RenderTests(unittest.TestCase):
 
     def test_run_render_steps_adds_low_signal_note_for_python_classes(self):
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp) / "demo"
+            repo_root = Path(tmp).resolve() / "demo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             (repo_root / "pyproject.toml").write_text('[project]\nname = "demo"\n')
             (repo_root / "refresh.py").write_text(
@@ -760,7 +760,7 @@ class RenderTests(unittest.TestCase):
 
     def test_run_render_steps_replaces_blank_pydeps_svg_with_summary(self):
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp) / "demo"
+            repo_root = Path(tmp).resolve() / "demo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             (repo_root / "pyproject.toml").write_text('[project]\nname = "demo"\n')
             (repo_root / "scripts").mkdir()
@@ -808,7 +808,7 @@ xmlns="http://www.w3.org/2000/svg">
 
     def test_run_render_steps_rewrites_package_diagram_with_package_summaries(self):
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp) / "demo"
+            repo_root = Path(tmp).resolve() / "demo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             (repo_root / "pyproject.toml").write_text('[project]\nname = "demo"\n')
             (repo_root / "src" / "demo").mkdir(parents=True)
@@ -874,7 +874,7 @@ xmlns="http://www.w3.org/2000/svg">
 
     def test_run_render_steps_rewrites_package_diagram_for_mixed_source_roots(self):
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp) / "demo"
+            repo_root = Path(tmp).resolve() / "demo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             (repo_root / "pyproject.toml").write_text('[project]\nname = "demo"\n')
             (repo_root / "scripts").mkdir()
@@ -935,7 +935,7 @@ xmlns="http://www.w3.org/2000/svg">
 
     def test_run_render_steps_generates_shell_database_and_tooling_sources(self):
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp) / "demo"
+            repo_root = Path(tmp).resolve() / "demo"
             (repo_root / "docs" / "diagrams").mkdir(parents=True)
             (repo_root / "scripts").mkdir()
             (repo_root / "scripts" / "common.sh").write_text("#!/usr/bin/env bash\necho common\n")
