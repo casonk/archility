@@ -4,6 +4,10 @@ All notable changes to `archility` are documented here.
 
 ## Unreleased
 
+- Added `bootstrap.sh`, which creates a virtualenv, installs the package in
+  editable mode, and verifies the `archility` command runs. The README
+  previously documented a bare `python3 -m pip install -e .`, which PEP 668
+  causes current Debian, Ubuntu, Arch and openSUSE to refuse outright.
 - Initialized `archility` as the shared architecture inventory and drift-check utility repo.
 - Added a dependency-free audit CLI, tests, CI, and portfolio-standard governance files.
 - Added a module entry point and architecture diagram artifact so the documented CLI paths and self-audit output stay aligned.
