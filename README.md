@@ -67,9 +67,33 @@ The paired `docs/diagrams/repo-architecture.{puml,drawio}` files describe this l
 ## Install
 
 ```bash
-python3 -m pip install -e .
+./bootstrap.sh
 bash setup.sh
 ```
+
+`bootstrap.sh` creates `.venv`, installs the package in editable mode, and
+verifies the `archility` command actually runs. `setup.sh` then provisions the
+PlantUML/Draw.io toolchain under `tools/`.
+
+Use `./bootstrap.sh --no-dev` to skip the test and lint dependencies, or
+`./bootstrap.sh --venv PATH` to build the environment somewhere else.
+
+<details>
+<summary>Why not <code>pip install -e .</code> directly?</summary>
+
+Since [PEP 668](https://peps.python.org/pep-0668/), Debian, Ubuntu, Arch and
+openSUSE mark the system Python as externally managed, and pip refuses to
+install into it:
+
+```
+error: externally-managed-environment
+```
+
+Fedora still allows it, which is why the old instruction worked on some
+machines and not others. Installing into a virtualenv is correct on all of
+them, and on macOS and Windows too.
+
+</details>
 
 Or run directly from the repo root:
 
