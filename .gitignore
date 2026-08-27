@@ -25,3 +25,7 @@ CLAUDE.md
 .tachometer/
 
 /REFS-LOCAL.md
+
+# Local-only downstream inventory: may name private repositories, which the
+# tracked downstream-repos.toml must not. Ship only the .example template.
+config/downstream-repos.local.toml

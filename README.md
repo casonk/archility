@@ -28,7 +28,6 @@ The shared portfolio standards live in `./util-repos/traction-control` from the 
 `archility` now tracks the architecture toolchain conventions already used elsewhere in the portfolio:
 
 - `./util-repos/nordility`: paired PlantUML and Draw.io architecture sources with checked-in PNG/SVG renders
-- `./private-repository`: rich consumer example of paired PlantUML and Draw.io repo-architecture sources plus contributor-facing architecture detail
 - `./drawio-templates`: reusable Draw.io templates for architecture and other diagram families
 
 See `docs/portfolio-architecture-toolchain.md` for the concrete conventions and commands.
@@ -112,13 +111,13 @@ archility audit .
 Generate the standard architecture starter files for another repository:
 
 ```bash
-archility generate ../../private-repository
+archility generate ../../util-repos/nordility
 ```
 
 Render architecture diagrams for another repository after bootstrapping the shared toolchain:
 
 ```bash
-archility render ../../private-repository
+archility render ../../util-repos/nordility
 ```
 
 Render is shared infrastructure for both paths. The source diagrams may come from deterministic scaffolding or from a deeper agent-authored architecture pass. The same render pass can also derive supplemental deterministic sidecars for Python package/module structure, shell-script flow, SQL/schema relationships, and third-party tooling entrypoints when those signals are present.
