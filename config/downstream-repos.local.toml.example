@@ -1,0 +1,8 @@
+# Copy to downstream-repos.local.toml (gitignored) to record private downstream
+# consumers without naming them in the tracked, public downstream-repos.toml.
+
+[downstream_repos]
+tracking_basis = "portfolio architecture baseline (private consumers)"
+paths = [
+  "./health-repos/example-private-consumer",
+]

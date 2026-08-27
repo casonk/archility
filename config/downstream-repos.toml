@@ -3,6 +3,10 @@
 # Archility is the portfolio-standard architecture toolchain, so this inventory
 # follows the current portfolio baseline rather than narrower repo-local
 # integration points.
+#
+# This file is public and lists only public consumers. Private downstream
+# consumers are kept in the gitignored config/downstream-repos.local.toml so
+# their names never appear in a tracked file.
 
 [utility_repo]
 path = "./util-repos/archility"
@@ -15,8 +19,6 @@ paths = [
   "./doc-repos/my-consent",
   "./doc-repos/university-coursework",
   "./drawio-templates",
-  "./health-repos/private-repository",
-  "./private-repository",
   "./research-repos/citegres",
   "./research-repos/pushshift_python",
   "./research-repos/sonetsim",
