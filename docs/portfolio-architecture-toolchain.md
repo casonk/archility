@@ -37,10 +37,6 @@
   - Uses paired PlantUML and Draw.io architecture sources under `docs/diagrams/`.
   - Keeps checked-in `.png` and `.svg` renders alongside those sources.
   - Documents the local regeneration command in `docs/contributor-architecture-blueprint.md`.
-- `./personal-finance`
-  - Documents both PlantUML and Draw.io architecture files in `README.md`.
-  - Uses the same repo-architecture starter filenames now standardized across the portfolio.
-  - Remains a key reference repo for the current architecture artifact layout and render outputs.
 - `./drawio-templates`
   - Acts as the reusable Draw.io template source for architecture-diagram starting points and previews.
 

@@ -51,7 +51,7 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m unittest discover -s tests -
 - Keep the agentic path explicit: agents should inspect the repository end-to-end and author unique architecture content when the starter is not enough.
 - Treat render support as shared infrastructure for both paths; richer agent-authored PlantUML diagrams may need Graphviz even though the starter baseline uses Smetana.
 - Update `README.md`, `docs/contributor-architecture-blueprint.md`, and tests when CLI behavior changes.
-- Keep the documented portfolio toolchain references aligned with `./util-repos/nordility`, `./personal-finance`, and `./drawio-templates` when diagram conventions change.
+- Keep the documented portfolio toolchain references aligned with `./util-repos/nordility` and `./drawio-templates` when diagram conventions change.
 - Keep audit rules explainable; opaque scoring heuristics should be avoided unless they are surfaced clearly in the output.
 - Treat this repo as the standard home for architecture-oriented portfolio tooling, including shared diagram bootstrap and render flows, unless the user explicitly chooses another location.
 
