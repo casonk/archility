@@ -3,10 +3,12 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 from xml.etree import ElementTree
 
 from archility.cli import main
 from archility.render import (
+    _default_runner,
     build_render_steps,
     format_render_plan,
     partition_runnable_steps,
@@ -74,6 +76,57 @@ class RenderTests(unittest.TestCase):
                 steps[2].produced_output,
                 str(repo_root / "docs" / "diagrams" / "repo-architecture.drawio.svg"),
             )
+
+    def test_default_runner_wraps_headless_drawio_with_xvfb_run(self):
+        command = [
+            "/tool-home/tools/bin/drawio",
+            "--no-sandbox",
+            "-x",
+            "-f",
+            "svg",
+            "-o",
+            "out.svg",
+            "input.drawio",
+        ]
+        with (
+            mock.patch.dict("os.environ", {}, clear=True),
+            mock.patch("archility.render.shutil.which", return_value="/usr/bin/xvfb-run"),
+            mock.patch("archility.render.subprocess.run") as run,
+        ):
+            _default_runner(command, cwd="/repo")
+
+        run.assert_called_once_with(
+            ["/usr/bin/xvfb-run", "-a", *command],
+            check=True,
+            cwd="/repo",
+            timeout=120,
+        )
+
+    def test_skip_missing_tools_skips_headless_drawio_without_xvfb_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp).resolve() / "demo"
+            (repo_root / "docs" / "diagrams").mkdir(parents=True)
+            (repo_root / "docs" / "diagrams" / "repo-architecture.puml").write_text(
+                "@startuml\n@enduml\n"
+            )
+            (repo_root / "docs" / "diagrams" / "repo-architecture.drawio").write_text(
+                "<mxfile />\n"
+            )
+            tool_root = repo_root / "tool-home" / "tools" / "bin"
+            tool_root.mkdir(parents=True)
+            (tool_root / "plantuml").write_text("#!/usr/bin/env bash\n")
+            (tool_root / "drawio").write_text("#!/usr/bin/env bash\n")
+
+            steps = build_render_steps(repo_root, archility_root=repo_root / "tool-home")
+
+            with (
+                mock.patch.dict("os.environ", {}, clear=True),
+                mock.patch("archility.render.shutil.which", return_value=None),
+            ):
+                runnable, skipped = partition_runnable_steps(steps)
+
+            self.assertEqual([step.tool for step in runnable], ["plantuml", "plantuml"])
+            self.assertEqual([step.tool for step in skipped], ["drawio", "drawio"])
 
     def test_build_render_steps_for_python_repo_adds_pydeps_and_pyreverse(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -142,11 +142,11 @@ def handle_render(args: argparse.Namespace) -> int:
     rendered = [step for step in steps if step not in skipped]
     print(format_render_plan(args.repo_path, rendered))
     if skipped:
-        missing = sorted({step.command[0] for step in skipped})
-        print(f"skipped: {len(skipped)} step(s) whose tool is not installed")
-        for path in missing:
+        unavailable = sorted({step.command[0] for step in skipped})
+        print(f"skipped: {len(skipped)} step(s) whose renderer is not runnable")
+        for path in unavailable:
             print(f"  - {path}")
-        print("  install the missing toolchain with archility/setup.sh to render these")
+        print("  install the missing toolchain, or xvfb-run for headless draw.io exports")
     return 0
 
 

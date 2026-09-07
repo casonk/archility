@@ -5,8 +5,10 @@ from __future__ import annotations
 import ast
 import html
 import io
+import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 from collections.abc import Callable
@@ -34,6 +36,7 @@ SHELL_GRAPH_FILENAME = "shell-call-graph.puml"
 DATABASE_GRAPH_FILENAME = "database-schema.puml"
 TOOLING_GRAPH_FILENAME = "tooling-integrations.puml"
 NORMALIZED_TEXT_OUTPUT_SUFFIXES = {".svg"}
+RENDER_COMMAND_TIMEOUT_SECONDS = 120
 DRAWIO_EDGE_STYLE_DEFAULTS = (
     ("jumpStyle", "arc"),
     ("jumpSize", "10"),
@@ -427,7 +430,9 @@ def partition_runnable_steps(
     runnable: list[RenderStep] = []
     skipped: list[RenderStep] = []
     for step in steps:
-        if not step.is_internal and step.command[0] in missing:
+        if not step.is_internal and (
+            step.command[0] in missing or _drawio_needs_unavailable_display(step)
+        ):
             skipped.append(step)
         else:
             runnable.append(step)
@@ -467,7 +472,47 @@ def run_render_steps(
 
 
 def _default_runner(command: list[str], cwd: str | None) -> None:
-    subprocess.run(command, check=True, cwd=cwd)
+    subprocess.run(
+        _command_for_execution(command),
+        check=True,
+        cwd=cwd,
+        timeout=_render_command_timeout_seconds(),
+    )
+
+
+def _command_for_execution(command: list[str]) -> list[str]:
+    if _is_drawio_command(command) and not os.environ.get("DISPLAY"):
+        xvfb_run = shutil.which("xvfb-run")
+        if xvfb_run is None:
+            raise RuntimeError(
+                "draw.io export requires $DISPLAY or xvfb-run; install "
+                "xorg-x11-server-Xvfb or run archility render with --skip-missing-tools"
+            )
+        return [xvfb_run, "-a", *command]
+    return command
+
+
+def _drawio_needs_unavailable_display(step: RenderStep) -> bool:
+    return (
+        step.tool == "drawio" and not os.environ.get("DISPLAY") and shutil.which("xvfb-run") is None
+    )
+
+
+def _is_drawio_command(command: list[str]) -> bool:
+    return bool(command) and Path(command[0]).name == "drawio"
+
+
+def _render_command_timeout_seconds() -> int:
+    raw_timeout = os.environ.get("ARCHILITY_RENDER_TIMEOUT_SECONDS")
+    if raw_timeout is None:
+        return RENDER_COMMAND_TIMEOUT_SECONDS
+    try:
+        timeout = int(raw_timeout)
+    except ValueError as exc:
+        raise RuntimeError("ARCHILITY_RENDER_TIMEOUT_SECONDS must be an integer") from exc
+    if timeout <= 0:
+        raise RuntimeError("ARCHILITY_RENDER_TIMEOUT_SECONDS must be positive")
+    return timeout
 
 
 def format_render_plan(repo_path: str | Path, steps: list[RenderStep]) -> str:
