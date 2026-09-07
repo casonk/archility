@@ -147,6 +147,12 @@ The supplemental sidecars are deterministic introspection diagrams. The Python p
 
 For Draw.io diagrams, prefer plain identifier text inside diagram labels when checked-in PNG exports matter. Backticks can render inconsistently in draw.io's direct PNG export path even when the SVG looks acceptable.
 
+Draw.io exports use Electron and need a display. On headless Linux hosts, install
+`xorg-x11-server-Xvfb`; `archility render` automatically wraps draw.io export
+commands with `xvfb-run -a` when `$DISPLAY` is unset. External render commands
+have a default 120-second timeout, adjustable with
+`ARCHILITY_RENDER_TIMEOUT_SECONDS`.
+
 ## Tests
 
 ```bash
