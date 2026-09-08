@@ -117,6 +117,7 @@ SHELL_BUILTINS = {
 COMMAND_WRAPPERS = {"builtin", "command", "env", "nohup", "sudo", "time"}
 TOOL_WRAPPER_DIR_PARTS = ("tools", "bin")
 ENV_ASSIGNMENT_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+SHELL_ASSIGNMENT_HEAD_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\+?=|\[[^]]*\]=)")
 CREATE_TABLE_PATTERN = re.compile(
     r"\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?([A-Za-z0-9_.`\"[\]-]+)",
     re.IGNORECASE,
@@ -1600,11 +1601,11 @@ def _collect_shell_function_names(text: str) -> set[str]:
     function_names: set[str] = set()
     for raw_line in text.splitlines():
         line = raw_line.strip()
-        match = re.match(r"^(?:function\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{?$", line)
+        match = re.match(r"^(?:function\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{(?:\s|$)", line)
         if match is not None:
             function_names.add(match.group(1))
             continue
-        match = re.match(r"^function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{?$", line)
+        match = re.match(r"^function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{(?:\s|$)", line)
         if match is not None:
             function_names.add(match.group(1))
     return function_names
@@ -1612,8 +1613,8 @@ def _collect_shell_function_names(text: str) -> set[str]:
 
 def _looks_like_shell_function_definition(line: str) -> bool:
     return (
-        re.match(r"^(?:function\s+)?[A-Za-z_][A-Za-z0-9_]*\s*\(\)\s*\{?$", line) is not None
-        or re.match(r"^function\s+[A-Za-z_][A-Za-z0-9_]*\s*\{?$", line) is not None
+        re.match(r"^(?:function\s+)?[A-Za-z_][A-Za-z0-9_]*\s*\(\)\s*\{(?:\s|$)", line) is not None
+        or re.match(r"^function\s+[A-Za-z_][A-Za-z0-9_]*\s*\{(?:\s|$)", line) is not None
     )
 
 
@@ -1681,10 +1682,18 @@ def _normalize_tool_command(
     if (
         not head_name
         or head_name.startswith("-")
+        or head_name.startswith(".")
+        or head_name.startswith("%")
+        or head_name[0].isdigit()
+        or head_name[0].isupper()
         or head_name.endswith(":")
         or head_name.endswith(")")
         or head_name.endswith("()")
+        or SHELL_ASSIGNMENT_HEAD_PATTERN.match(head_name) is not None
+        or any(character.isspace() for character in head)
+        or any(marker in head_name for marker in ("*", "?", "[", "]", "(", ")", "<", ">", "&"))
         or any(marker in head_name for marker in ("$", "{", "}"))
+        or ("." in head_name and not head_name.startswith("python"))
         or head_name.isupper()
         or not any(character.isalnum() for character in head_name)
     ):
@@ -1710,7 +1719,7 @@ def _normalize_tool_command(
             return resolved.name
         if resolved is not None and resolved.is_file():
             return None
-        return head_name or head
+        return None
     return head_name
 
 
