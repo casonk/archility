@@ -9,6 +9,7 @@ from xml.etree import ElementTree
 from archility.cli import main
 from archility.render import (
     _default_runner,
+    _extract_tools_from_shell_script,
     build_render_steps,
     format_render_plan,
     partition_runnable_steps,
@@ -1051,6 +1052,32 @@ xmlns="http://www.w3.org/2000/svg">
             self.assertTrue(
                 (repo_root / "docs" / "diagrams" / "tooling-integrations.puml.svg").exists()
             )
+
+    def test_shell_tool_extraction_skips_non_command_heads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp).resolve()
+            script = repo_root / "tests" / "example.sh"
+            script.parent.mkdir()
+            text = "\n".join(
+                [
+                    "assert_contains() { :; }",
+                    'assert_contains "candidate mismatch reports the exact label invariant"',
+                    "REPOSITORIES+=(archility tachometer)",
+                    ".portfolio-materializer.lock",
+                    "%s",
+                    "10",
+                    "README.md",
+                    "for file in *.sh *.bash; do",
+                    "  2>&1",
+                    "  curl https://example.com",
+                    "done",
+                ]
+            )
+            script.write_text(text, encoding="utf-8")
+
+            tools = _extract_tools_from_shell_script(script, repo_root)
+
+            self.assertEqual(tools, {"curl"})
 
     def test_render_skips_steps_whose_tool_is_missing(self):
         """A partial toolchain should still render what it can.
