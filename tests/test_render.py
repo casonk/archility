@@ -11,6 +11,7 @@ from archility.render import (
     _default_runner,
     _extract_tools_from_shell_script,
     build_render_steps,
+    drawio_is_empty,
     format_render_plan,
     partition_runnable_steps,
     run_render_steps,
@@ -1119,6 +1120,77 @@ xmlns="http://www.w3.org/2000/svg">
             steps = build_render_steps(repo_root, archility_root=Path(tmp).resolve())
             with self.assertRaises(FileNotFoundError):
                 run_render_steps(steps, runner=lambda command, cwd: None)
+
+
+EMPTY_DRAWIO = (
+    '<mxfile host="app.diagrams.net"><diagram name="Public catalog"><mxGraphModel><root>'
+    '<mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>'
+)
+FILLED_DRAWIO = (
+    '<mxfile><diagram name="Page"><mxGraphModel><root><mxCell id="0"/>'
+    '<mxCell id="1" parent="0"/><mxCell id="2" value="Box" vertex="1" parent="1"/>'
+    "</root></mxGraphModel></diagram></mxfile>"
+)
+
+
+def _compressed_drawio(model_xml: str) -> str:
+    import base64
+    import urllib.parse
+    import zlib
+
+    compressor = zlib.compressobj(wbits=-15)
+    raw = compressor.compress(urllib.parse.quote(model_xml).encode()) + compressor.flush()
+    return f'<mxfile><diagram name="Page">{base64.b64encode(raw).decode()}</diagram></mxfile>'
+
+
+class EmptyDrawioTests(unittest.TestCase):
+    def _write(self, root: Path, text: str) -> Path:
+        path = root / "docs" / "diagrams" / "repo-architecture.drawio"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+        return path
+
+    def test_root_cells_only_is_empty_and_gets_no_render_steps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._write(Path(tmp), EMPTY_DRAWIO)
+            self.assertTrue(drawio_is_empty(source))
+            steps = build_render_steps(tmp)
+            self.assertFalse([step for step in steps if step.tool == "drawio"])
+
+    def test_page_with_a_shape_still_renders(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._write(Path(tmp), FILLED_DRAWIO)
+            self.assertFalse(drawio_is_empty(source))
+            steps = build_render_steps(tmp)
+            self.assertEqual(len([step for step in steps if step.tool == "drawio"]), 2)
+
+    def test_compressed_pages_are_inspected(self) -> None:
+        empty_model = (
+            '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>'
+        )
+        filled_model = (
+            '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>'
+            '<mxCell id="2" vertex="1" parent="1"/></root></mxGraphModel>'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertTrue(
+                drawio_is_empty(self._write(Path(tmp), _compressed_drawio(empty_model)))
+            )
+            self.assertFalse(
+                drawio_is_empty(self._write(Path(tmp), _compressed_drawio(filled_model)))
+            )
+
+    def test_unreadable_file_is_left_for_drawio_to_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertFalse(drawio_is_empty(self._write(Path(tmp), "<mxfile><diagram>")))
+
+    def test_cli_reports_the_skipped_empty_diagram(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write(Path(tmp), EMPTY_DRAWIO)
+            err = io.StringIO()
+            with redirect_stdout(io.StringIO()), mock.patch("sys.stderr", err):
+                self.assertEqual(main(["render", tmp, "--dry-run"]), 0)
+            self.assertIn("skipped empty draw.io diagram", err.getvalue())
 
 
 if __name__ == "__main__":

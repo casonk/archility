@@ -4,6 +4,9 @@ All notable changes to `archility` are documented here.
 
 ## Unreleased
 
+- `archility render` skips a `.drawio` file whose pages hold no shapes and warns
+  on stderr. draw.io exits with "Export failed" on an empty page, which used
+  to fail the whole render run. Compressed pages are inspected too.
 - Added `bootstrap.sh`, which creates a virtualenv, installs the package in
   editable mode, and verifies the `archility` command runs. The README
   previously documented a bare `python3 -m pip install -e .`, which PEP 668
