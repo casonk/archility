@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import base64
 import html
 import io
 import os
@@ -11,6 +12,8 @@ import shlex
 import shutil
 import subprocess
 import sys
+import urllib.parse
+import zlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -349,6 +352,48 @@ def find_drawio_sources(repo_path: str | Path) -> list[Path]:
     )
 
 
+def _drawio_page_models(diagram: ElementTree.Element) -> ElementTree.Element | None:
+    model = diagram.find("mxGraphModel")
+    if model is not None:
+        return model
+    payload = (diagram.text or "").strip()
+    if not payload:
+        return None
+    # Compressed pages: base64, raw deflate, then URL-encoded XML.
+    inflated = zlib.decompress(base64.b64decode(payload), -15).decode("utf-8")
+    return ElementTree.fromstring(urllib.parse.unquote(inflated))
+
+
+def drawio_is_empty(source: Path) -> bool:
+    """True when every page of a draw.io file holds only its two root cells.
+
+    draw.io refuses to export such a file ("Export failed"), so rendering one
+    fails the whole run. An unreadable file is not called empty: draw.io gets
+    to report that itself.
+    """
+    try:
+        root = ElementTree.parse(source).getroot()
+        diagrams = root.findall("diagram") if root.tag == "mxfile" else []
+        models = [_drawio_page_models(diagram) for diagram in diagrams]
+        if root.tag == "mxGraphModel":
+            models = [root]
+    except (ElementTree.ParseError, OSError, ValueError, zlib.error):
+        return False
+    if not models:
+        return False
+    for model in models:
+        if model is None:
+            continue
+        cells = model.find("root")
+        if cells is not None and len(list(cells)) > 2:
+            return False
+    return True
+
+
+def find_empty_drawio_sources(repo_path: str | Path) -> list[Path]:
+    return [source for source in find_drawio_sources(repo_path) if drawio_is_empty(source)]
+
+
 def build_render_steps(
     repo_path: str | Path, *, archility_root: Path | None = None
 ) -> list[RenderStep]:
@@ -364,6 +409,8 @@ def build_render_steps(
         steps.extend(_build_plantuml_render_steps(source, plantuml_bin))
 
     for source in find_drawio_sources(repo_root):
+        if drawio_is_empty(source):
+            continue
         steps.extend(_build_drawio_render_steps(source, drawio_bin))
 
     python_plan = build_python_diagram_plan(repo_root)

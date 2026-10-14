@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections.abc import Sequence
 
 from .audit import audit_repositories, format_text_report, write_backlog_items
 from .generate import format_generate_report, generate_repositories
-from .render import build_render_steps, format_render_plan, run_render_steps
+from .render import (
+    build_render_steps,
+    find_empty_drawio_sources,
+    format_render_plan,
+    run_render_steps,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -132,6 +138,8 @@ def handle_generate(args: argparse.Namespace) -> int:
 
 def handle_render(args: argparse.Namespace) -> int:
     steps = build_render_steps(args.repo_path)
+    for source in find_empty_drawio_sources(args.repo_path):
+        print(f"skipped empty draw.io diagram (no shapes to export): {source}", file=sys.stderr)
     if args.dry_run:
         print(format_render_plan(args.repo_path, steps))
         return 0

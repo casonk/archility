@@ -153,6 +153,10 @@ commands with `xvfb-run -a` when `$DISPLAY` is unset. External render commands
 have a default 120-second timeout, adjustable with
 `ARCHILITY_RENDER_TIMEOUT_SECONDS`.
 
+A `.drawio` file whose pages hold no shapes is skipped with a warning on
+stderr. draw.io refuses to export an empty page, so rendering one would fail
+the whole run; fix the generator or the file that produced it.
+
 ## Tests
 
 ```bash
