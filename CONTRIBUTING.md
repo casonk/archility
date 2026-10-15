@@ -27,3 +27,13 @@ PYTHONPATH=src python3 -m archility render . --dry-run
 - Prefer deterministic, inspectable output over opaque heuristics.
 - Treat architecture drift checks as governance support, not as permission to rewrite repo structure automatically.
 - Keep portfolio-wide standards aligned with `./util-repos/traction-control`.
+
+## AI Contribution Disclosure
+
+Parts of this repository's code, documentation and commit history were drafted
+with AI coding assistants, including Claude Code, OpenAI Codex, GitHub Copilot
+and Continue. The maintainer directs that work, reviews and tests each change
+before it merges, and is responsible for the result.
+
+This section is the repository-wide disclosure. Individual commits, pull
+requests and files do not carry per-tool attribution lines.
