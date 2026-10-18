@@ -4,6 +4,8 @@ All notable changes to `archility` are documented here.
 
 ## Unreleased
 
+- Prepared v0.1.1 for PyPI by replacing the development extra's Git URL with
+  the published `dyno-lab` distribution.
 - `archility render` skips a `.drawio` file whose pages hold no shapes and warns
   on stderr. draw.io exits with "Export failed" on an empty page, which used
   to fail the whole render run. Compressed pages are inspected too.
