@@ -6,14 +6,15 @@ skinparam defaultFontName Monospace
 skinparam componentStyle rectangle
 skinparam linetype ortho
 rectangle ".github/workflows/ci.yml\n2 detected tools" as source_github_workflows_ci_yml #E0F2FE
-rectangle ".github/workflows/python-publish.yml\n1 detected tool" as source_github_workflows_python_publish_yml #E0F2FE
+rectangle ".github/workflows/python-publish.yml\n3 detected tools" as source_github_workflows_python_publish_yml #E0F2FE
 rectangle ".github/workflows/secret-scan.yml\n1 detected tool" as source_github_workflows_secret_scan_yml #E0F2FE
 rectangle "bootstrap.sh\n2 detected tools" as source_bootstrap_sh #E0F2FE
 rectangle "scripts/run_tachometer_profile.sh\n3 detected tools" as source_scripts_run_tachometer_profile_sh #E0F2FE
 rectangle "setup.sh\n7 detected tools" as source_setup_sh #E0F2FE
+cloud "actions/download-artifact" as tool_actions_download_artifact #FEF3C7
 cloud "casonk/.github/.github/workflows/install-check.yml" as tool_casonk_github_github_workflows_install_check_yml #FEF3C7
+cloud "casonk/.github/.github/workflows/python-build.yml" as tool_casonk_github_github_workflows_python_build_yml #FEF3C7
 cloud "casonk/.github/.github/workflows/python-ci.yml" as tool_casonk_github_github_workflows_python_ci_yml #FEF3C7
-cloud "casonk/.github/.github/workflows/python-publish.yml" as tool_casonk_github_github_workflows_python_publish_yml #FEF3C7
 cloud "casonk/.github/.github/workflows/secret-scan.yml" as tool_casonk_github_github_workflows_secret_scan_yml #FEF3C7
 cloud "cat" as tool_cat #FEF3C7
 cloud "chmod" as tool_chmod #FEF3C7
@@ -21,6 +22,7 @@ cloud "curl" as tool_curl #FEF3C7
 cloud "inkscape" as tool_inkscape #FEF3C7
 cloud "mkdir" as tool_mkdir #FEF3C7
 cloud "pip" as tool_pip #FEF3C7
+cloud "pypa/gh-action-pypi-publish" as tool_pypa_gh_action_pypi_publish #FEF3C7
 cloud "run" as tool_run #FEF3C7
 cloud "sed" as tool_sed #FEF3C7
 cloud "summarize" as tool_summarize #FEF3C7
@@ -28,7 +30,9 @@ cloud "tachometer" as tool_tachometer #FEF3C7
 cloud "venv" as tool_venv #FEF3C7
 source_github_workflows_ci_yml --> tool_casonk_github_github_workflows_install_check_yml
 source_github_workflows_ci_yml --> tool_casonk_github_github_workflows_python_ci_yml
-source_github_workflows_python_publish_yml --> tool_casonk_github_github_workflows_python_publish_yml
+source_github_workflows_python_publish_yml --> tool_actions_download_artifact
+source_github_workflows_python_publish_yml --> tool_casonk_github_github_workflows_python_build_yml
+source_github_workflows_python_publish_yml --> tool_pypa_gh_action_pypi_publish
 source_github_workflows_secret_scan_yml --> tool_casonk_github_github_workflows_secret_scan_yml
 source_bootstrap_sh --> tool_cat
 source_bootstrap_sh --> tool_sed
@@ -44,6 +48,6 @@ source_setup_sh --> tool_pip
 source_setup_sh --> tool_venv
 note as toolingGraphSummary
 Scanned 6 tooling entrypoints.
-Detected 15 third-party tools.
+Detected 17 third-party tools.
 end note
 @enduml
