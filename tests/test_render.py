@@ -1068,6 +1068,8 @@ xmlns="http://www.w3.org/2000/svg">
                     "%s",
                     "10",
                     "README.md",
+                    'echo "usage: $0 start [ADDRESS] | status | stop"',
+                    "echo example # pipe | status is only a comment",
                     "for file in *.sh *.bash; do",
                     "  2>&1",
                     "  curl https://example.com",
@@ -1079,6 +1081,20 @@ xmlns="http://www.w3.org/2000/svg">
             tools = _extract_tools_from_shell_script(script, repo_root)
 
             self.assertEqual(tools, {"curl"})
+
+    def test_shell_tool_extraction_keeps_real_pipelines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp).resolve()
+            script = repo_root / "scripts" / "example.sh"
+            script.parent.mkdir()
+            script.write_text(
+                'echo "usage: start | status | stop"\ncurl https://example.com | grep ready\n',
+                encoding="utf-8",
+            )
+
+            tools = _extract_tools_from_shell_script(script, repo_root)
+
+            self.assertEqual(tools, {"curl", "grep"})
 
     def test_render_skips_steps_whose_tool_is_missing(self):
         """A partial toolchain should still render what it can.

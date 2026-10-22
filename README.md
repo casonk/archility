@@ -145,6 +145,8 @@ The generated starter PlantUML diagrams use Smetana, so they do not depend on a 
 
 The supplemental sidecars are deterministic introspection diagrams. The Python path uses `pydeps` and `pyreverse`; the shell, database, and tooling paths emit managed PlantUML sources/renders directly from repository content. These assets help explain code structure and operational boundaries, but they do not replace the repo-authored `docs/contributor-architecture-blueprint.md` or the paired `repo-architecture` sources.
 
+Shell command extraction treats quoted help text and comments as data while preserving actual pipelines, so a literal `| status |` in a usage message does not become a detected external tool.
+
 For Draw.io diagrams, prefer plain identifier text inside diagram labels when checked-in PNG exports matter. Backticks can render inconsistently in draw.io's direct PNG export path even when the SVG looks acceptable.
 
 Draw.io exports use Electron and need a display. On headless Linux hosts, install
