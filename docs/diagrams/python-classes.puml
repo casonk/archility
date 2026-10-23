@@ -1,4 +1,4 @@
-@startuml classes_archility
+@startuml classes_checkout
 set namespaceSeparator none
 class "DatabaseDiagramPlan" as src.archility.render.DatabaseDiagramPlan {
   repo_root : Path
