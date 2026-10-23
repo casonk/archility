@@ -1629,7 +1629,7 @@ def _iter_command_token_lists(text: str) -> list[list[str]]:
         if _looks_like_shell_function_definition(line) or _looks_like_shell_case_label(line):
             continue
         heredoc_match = re.search(r"<<-?\s*['\"]?([A-Za-z0-9_]+)['\"]?", raw_line)
-        for segment in re.split(r"\s*(?:&&|\|\||[|;])\s*", line):
+        for segment in _split_shell_control_segments(line):
             segment = segment.strip()
             if not segment:
                 continue
@@ -1642,6 +1642,65 @@ def _iter_command_token_lists(text: str) -> list[list[str]]:
         if heredoc_match is not None:
             heredoc_end = heredoc_match.group(1)
     return token_lists
+
+
+def _split_shell_control_segments(line: str) -> list[str]:
+    """Split shell command lists without treating quoted operators as syntax."""
+    segments: list[str] = []
+    start = 0
+    quote: str | None = None
+    escaped = False
+    word_active = False
+    index = 0
+
+    while index < len(line):
+        character = line[index]
+        if escaped:
+            escaped = False
+            word_active = True
+            index += 1
+            continue
+        if quote == "'":
+            if character == "'":
+                quote = None
+            index += 1
+            continue
+        if quote == '"':
+            if character == "\\":
+                escaped = True
+            elif character == '"':
+                quote = None
+            index += 1
+            continue
+        if character in " \t\r\n":
+            word_active = False
+            index += 1
+            continue
+        if character == "#" and not word_active:
+            break
+        if character in "'\"":
+            quote = character
+            word_active = True
+            index += 1
+            continue
+        if character == "\\":
+            escaped = True
+            index += 1
+            continue
+
+        operator_width = 2 if line.startswith(("&&", "||"), index) else 1
+        if character in "&|;":
+            segments.append(line[start:index])
+            index += operator_width
+            start = index
+            word_active = False
+            continue
+
+        word_active = True
+        index += 1
+
+    segments.append(line[start:index])
+    return segments
 
 
 def _collect_shell_function_names(text: str) -> set[str]:
